@@ -104,16 +104,16 @@ export const getEtymology = async (
     });
 
     let instruction = '';
-    const lengthConstraint = '【重要】必ず140文字以内で、端的にわかりやすく。長文はNGです。英単語は1単語を1文字としてカウントしてください。';
+    const lengthConstraint = '【重要】あなたは英単語暗記を支援する先生です。必ず200字以内、かつ100文字以上で、端的にわかりやすく提示された英単語についてその意味や関連する言葉について説明してください。';
 
     if (type === 'true') {
-      instruction = `英単語「${word}」の正しい語源の成り立ちと、同じ語源の簡単な単語(最大3つ)を解説して。専門用語は不要。\n${lengthConstraint}`;
+      instruction = `英単語「${word}」の正しい語源の成り立ちと、同じ語源の簡単な単語(最大3つ)を解説してください。「ラテン語に由来する」など専門用語は使用せず、中学生でもわかるような簡単な説明をこころがけてください。\n${lengthConstraint}`;
     } else if (type === 'false') {
-      instruction = `英単語「${word}」の意味を覚えるための、面白くて尤もらしい「偽の語源」をでっち上げて。\n${lengthConstraint}`;
+      instruction = `英単語「${word}」の意味を覚えるための、尤もらしい「偽の語源」をでっち上げてください。「${word}」に似たCEFRのA2～B1程度の単語を1つ選び、まるでそれと語源が同じであるかのように「偽語源」を作成してください。\n${lengthConstraint}`;
     } else if (type === 'katakana') {
-      instruction = `英単語「${word}」に関連する身近な「カタカナ語」を挙げ、英単語の意味と結びつけて解説して。\n${lengthConstraint}`;
+      instruction = `英単語「${word}」の語源に関連する身近な「カタカナ語」を挙げ、英単語の意味と結びつけて解説してください。\n${lengthConstraint}`;
     } else if (type === 'god') {
-      instruction = `英単語「${word}」とキーワード「${hint}」が、まるで同じ語源・歴史的背景を持つかのように、尤もらしく面白く結びつけて。\n${lengthConstraint}`;
+      instruction = `英単語「${word}」とキーワード「${hint}」が、まるで同じ語源を持つかのように、尤もらしく結びつけて解説してください。\n${lengthConstraint}`;
     }
 
     const prompt = `${instruction}
