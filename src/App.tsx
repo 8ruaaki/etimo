@@ -5,6 +5,7 @@ import { Home } from './components/Home'
 import { ProfileEdit } from './components/ProfileEdit'
 import { EtymologyTest } from './components/EtymologyTest'
 import { FlashcardList } from './components/FlashcardList'
+import { WordList } from './components/WordList'
 import { WordRegistration } from './components/WordRegistration'
 
 function App() {
@@ -16,6 +17,7 @@ function App() {
       <Route path="/profile" element={<ProfileEdit />} />
       <Route path="/etymology-test" element={<EtymologyTest />} />
       <Route path="/flashcards" element={<FlashcardList />} />
+      <Route path="/flashcards/:title" element={<WordList />} />
       <Route path="/flashcards/:title/add" element={<WordRegistration />} />
     </Routes>
   )

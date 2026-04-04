@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getFlashcardList, createFlashcard, deleteFlashcard } from '../api/flashcard';
-import { PlusCircle, Trash2, BookOpen, ArrowLeft, PenLine } from 'lucide-react';
+import { PlusCircle, Trash2, BookOpen, ArrowLeft } from 'lucide-react';
 
 export const FlashcardList: React.FC = () => {
   const navigate = useNavigate();
@@ -146,6 +146,7 @@ export const FlashcardList: React.FC = () => {
         {flashcards.map((title, index) => (
           <div
             key={index}
+            onClick={() => navigate(`/flashcards/${encodeURIComponent(title)}`)}
             style={{
               background: 'rgba(15, 23, 42, 0.4)',
               border: '1px solid var(--panel-border)',
@@ -154,6 +155,7 @@ export const FlashcardList: React.FC = () => {
               display: 'flex',
               flexDirection: 'column',
               gap: '16px',
+              cursor: 'pointer',
               transition: 'all 0.3s ease'
             }}
             onMouseEnter={(e) => {
@@ -183,34 +185,10 @@ export const FlashcardList: React.FC = () => {
             
             <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => navigate(`/flashcards/${encodeURIComponent(title)}/add`)}
-                style={{
-                  flex: 1,
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  border: '1px solid rgba(59, 130, 246, 0.3)',
-                  borderRadius: '8px',
-                  padding: '10px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  color: '#60a5fa',
-                  fontSize: '0.9rem',
-                  transition: 'all 0.3s ease'
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteFlashcard(title);
                 }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)';
-                }}
-              >
-                <PenLine size={16} />
-                単語を追加
-              </button>
-              <button
-                onClick={() => handleDeleteFlashcard(title)}
                 style={{
                   background: 'rgba(239, 68, 68, 0.2)',
                   border: '1px solid rgba(239, 68, 68, 0.3)',
@@ -222,7 +200,8 @@ export const FlashcardList: React.FC = () => {
                   justifyContent: 'center',
                   gap: '8px',
                   color: '#ef4444',
-                  transition: 'all 0.3s ease'
+                  transition: 'all 0.3s ease',
+                  width: '100%'
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.background = 'rgba(239, 68, 68, 0.3)';

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight } from 'lucide-react';
 import { getKnownEtymologies } from '../api/flashcard';
-import { checkEtymologyMatch } from '../api/wordRegistration';
+import { checkEtymologyMatch, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD';
 
@@ -15,6 +15,7 @@ export const WordRegistration: React.FC = () => {
   const [freeText, setFreeText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [etymologyInfo, setEtymologyInfo] = useState<string>('');
+  const [etymologyParts, setEtymologyParts] = useState<EtymologyPart[]>([]);
 
   // ── Step: 単語入力 ──────────────────────────────────────────
   const handleJudge = async () => {
@@ -36,6 +37,7 @@ export const WordRegistration: React.FC = () => {
 
       if (matchResult.matched) {
         setEtymologyInfo(matchResult.explanation ?? '');
+        setEtymologyParts(matchResult.parts ?? []);
         setStep('screenA');
       } else {
         setStep('screenB');
@@ -66,7 +68,7 @@ export const WordRegistration: React.FC = () => {
       {/* ───── ヘッダー ───── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
         <button
-          onClick={() => navigate('/flashcards')}
+          onClick={() => navigate(`/flashcards/${encodeURIComponent(title || '')}`)}
           style={{
             background: 'rgba(255,255,255,0.05)',
             border: '1px solid var(--panel-border)',
@@ -105,6 +107,7 @@ export const WordRegistration: React.FC = () => {
           <ScreenA
             word={word}
             etymologyInfo={etymologyInfo}
+            etymologyParts={etymologyParts}
             onBack={backToInput}
             flashcardTitle={title ?? ''}
           />
@@ -280,14 +283,15 @@ const JudgingStep: React.FC = () => (
 );
 
 // ══════════════════════════════════════════════════════════════
-// 画面 A（仮）: 語源で暗記
+// 画面 A: 語源で暗記
 // ══════════════════════════════════════════════════════════════
 const ScreenA: React.FC<{
   word: string;
   etymologyInfo: string;
+  etymologyParts: EtymologyPart[];
   onBack: () => void;
   flashcardTitle: string;
-}> = ({ word, etymologyInfo, onBack, flashcardTitle: _flashcardTitle }) => (
+}> = ({ word, etymologyInfo, etymologyParts, onBack, flashcardTitle: _flashcardTitle }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
     <div
       style={{
@@ -302,28 +306,90 @@ const ScreenA: React.FC<{
         color: '#10b981',
         fontSize: '0.85rem',
         fontWeight: 600,
+        margin: '0 auto',
       }}
     >
       ✅ 語源で覚えやすい単語です
     </div>
 
-    <div
-      style={{
-        padding: '28px',
-        background: 'rgba(16,185,129,0.06)',
-        border: '1px solid rgba(16,185,129,0.2)',
-        borderRadius: '16px',
-      }}
-    >
-      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>対象単語</p>
-      <h3 style={{ fontSize: '2rem', fontWeight: 700, marginBottom: '16px', letterSpacing: '0.05em' }}>{word}</h3>
-      {etymologyInfo && (
-        <>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
-          <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{etymologyInfo}</p>
-        </>
-      )}
+    {/* 対象単語 */}
+    <div style={{ textAlign: 'center', margin: '16px 0' }}>
+      <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+        {word}
+      </h3>
     </div>
+
+    {/* 語源の分解と意味 */}
+    {etymologyParts && etymologyParts.length > 0 && (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
+        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
+          語源で分解
+        </h4>
+        
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          {etymologyParts.map((part, idx) => (
+            <div key={idx} style={{ 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '12px',
+              padding: '16px',
+              background: 'rgba(15, 23, 42, 0.4)',
+              borderRadius: '12px',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              {/* パーツと意味 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{ 
+                  background: 'rgba(16,185,129,0.15)', 
+                  color: '#10b981', 
+                  padding: '8px 16px', 
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '1.2rem',
+                  minWidth: '80px',
+                  textAlign: 'center'
+                }}>
+                  {part.part}
+                </div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 500 }}>
+                  {part.meaning}
+                </div>
+              </div>
+
+              {/* 関連語（同じ語源を持つ簡単な単語） */}
+              <div style={{ 
+                marginLeft: '16px',
+                paddingLeft: '16px',
+                borderLeft: '2px solid rgba(255,255,255,0.1)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '4px'
+              }}>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>同じ語源を持つ単語</p>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#60a5fa' }}>{part.relatedWord}</span>
+                  <span style={{ fontSize: '0.95rem', color: 'var(--text-secondary)' }}>{part.relatedWordMeaning}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {(!etymologyParts || etymologyParts.length === 0) && etymologyInfo && (
+      <div
+        style={{
+          padding: '28px',
+          background: 'rgba(16,185,129,0.06)',
+          border: '1px solid rgba(16,185,129,0.2)',
+          borderRadius: '16px',
+        }}
+      >
+        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
+        <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{etymologyInfo}</p>
+      </div>
+    )}
 
     {/* 仮ページである旨 */}
     <div
@@ -334,7 +400,7 @@ const ScreenA: React.FC<{
         borderRadius: '12px',
         color: '#eab308',
         fontSize: '0.85rem',
-        display: 'flex',
+        display: 'none', // Hide the "under construction" dev note as we are implementing it
         alignItems: 'center',
         gap: '8px',
       }}

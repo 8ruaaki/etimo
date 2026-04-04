@@ -6,9 +6,17 @@ const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-interface EtymologyCheckResult {
+export interface EtymologyPart {
+  part: string;
+  meaning: string;
+  relatedWord: string;
+  relatedWordMeaning: string;
+}
+
+export interface EtymologyCheckResult {
   matched: boolean;
   explanation?: string;
+  parts?: EtymologyPart[];
 }
 
 /**
@@ -28,6 +36,10 @@ export const checkEtymologyMatch = async (
       explanation: matched
         ? `（モック）「${word}」は語源リストの要素を含んでいます。`
         : undefined,
+      parts: matched ? [
+        { part: "ex", meaning: "外へ", relatedWord: "exit", relatedWordMeaning: "出口" },
+        { part: "port", meaning: "運ぶ", relatedWord: "portable", relatedWordMeaning: "持ち運び可能な" }
+      ] : []
     };
   }
 
@@ -55,11 +67,7 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 - 語根・接頭辞・接尾辞として語源リストの要素が単語に含まれていればmatched=true
 - 含まれていなければmatched=false
 
-以下のJSONフォーマットで回答してください:
-{
-  "matched": <boolean>,
-  "explanation": "<マッチした場合のみ：どの語源がどのように使われているかの簡潔な日本語説明（1〜2文）。マッチしない場合は空文字>"
-}
+判定結果が true の場合は、対象単語を語源で分解し、それぞれのパーツについて、同じ語源を持つ別の「簡単な」英単語（対象単語以外）を提示してください。
 `.trim();
 
   try {
@@ -72,8 +80,29 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0,
-          maxOutputTokens: 512,
-          responseMimeType: 'application/json', // JSONを強制（マークダウン不可）
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              matched: { type: "BOOLEAN" },
+              explanation: { type: "STRING" },
+              parts: {
+                type: "ARRAY",
+                items: {
+                  type: "OBJECT",
+                  properties: {
+                    part: { type: "STRING" },
+                    meaning: { type: "STRING" },
+                    relatedWord: { type: "STRING" },
+                    relatedWordMeaning: { type: "STRING" }
+                  },
+                  required: ["part", "meaning", "relatedWord", "relatedWordMeaning"]
+                }
+              }
+            },
+            required: ["matched", "explanation", "parts"]
+          }
         },
       }),
     });
