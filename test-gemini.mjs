@@ -5,7 +5,7 @@ async function test() {
     const API_KEY = "AIzaSyDyyHWJMNGs5lt1rwUjTcyZCMla6P0TBos"; // Testing with user's key
     const genAI = new GoogleGenerativeAI(API_KEY);
     const model = genAI.getGenerativeModel({
-      model: 'gemini-flash-latest',
+      model: 'gemini-2.5-flash',
       generationConfig: {
         responseMimeType: 'application/json',
       },

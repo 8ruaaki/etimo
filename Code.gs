@@ -37,6 +37,27 @@ function doPost(e) {
     if (action === 'deleteFlashcard') {
       return handleDeleteFlashcard(payload);
     }
+    if (action === 'saveQuiz') {
+      return handleSaveQuiz(payload);
+    }
+    if (action === 'getEtymologyTest') {
+      return handleGetEtymologyTest(payload);
+    }
+    if (action === 'createUserSheet') {
+      return handleCreateUserSheet(payload);
+    }
+    if (action === 'saveTestProgress') {
+      return handleSaveTestProgress(payload);
+    }
+    if (action === 'getTestProgress') {
+      return handleGetTestProgress(payload);
+    }
+    if (action === 'saveEtymologyTestResult') {
+      return handleSaveEtymologyTestResult(payload);
+    }
+    if (action === 'getKnownEtymologies') {
+      return handleGetKnownEtymologies(payload);
+    }
     
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Unknown action' }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -225,12 +246,6 @@ function handleCreateFlashcard(payload) {
   newSheet.appendRow(['単語', '語源', '意味']);
   newSheet.setFrozenRows(1);
   
-  // 単語カードを追加
-  for (var j = 0; j < payload.flashcards.length; j++) {
-    var card = payload.flashcards[j];
-    newSheet.appendRow([card.word, card.etymology, card.meaning]);
-  }
-  
   // Usersシートの作成者の行のE列以降にタイトルのみを追加
   // E列から始まる既存の単語帳リストを取得
   var lastColumn = usersSheet.getLastColumn();
@@ -315,11 +330,23 @@ function handleGetFlashcard(payload) {
   
   // 1行目はヘッダーなのでスキップ
   for (var i = 1; i < data.length; i++) {
-    flashcards.push({
+    var flashcard = {
       word: data[i][0] || '',
       etymology: data[i][1] || '',
       meaning: data[i][2] || ''
-    });
+    };
+    
+    // D列にクイズデータがある場合はパースして追加
+    if (data[i][3]) {
+      try {
+        flashcard.quiz = JSON.parse(data[i][3]);
+      } catch (e) {
+        // JSONパースエラーの場合は無視
+        Logger.log('Failed to parse quiz data for word: ' + data[i][0]);
+      }
+    }
+    
+    flashcards.push(flashcard);
   }
   
   return ContentService.createTextOutput(JSON.stringify({ 
@@ -496,6 +523,375 @@ function handleDeleteFlashcard(payload) {
   return ContentService.createTextOutput(JSON.stringify({ 
     success: true, 
     message: '単語帳が削除されました。'
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleSaveQuiz(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = payload.title + '_' + payload.email;
+  var flashcardSheet = ss.getSheetByName(sheetName);
+  
+  if (!flashcardSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '単語帳が見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // シート内で対象の単語を検索
+  var data = flashcardSheet.getDataRange().getValues();
+  var wordRowIndex = -1;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] === payload.word) {
+      wordRowIndex = i + 1; // シートの行番号（1-indexed）
+      break;
+    }
+  }
+  
+  if (wordRowIndex === -1) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '指定された単語が見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // クイズデータをJSON文字列として保存（D列に保存）
+  // payload.quizがnullの場合は空文字をセットしてクイズを削除する
+  var quizValue = payload.quiz ? JSON.stringify(payload.quiz) : "";
+  flashcardSheet.getRange(wordRowIndex, 4).setValue(quizValue);
+  
+  var message = payload.quiz ? 'クイズが保存されました。' : 'クイズが削除されました。';
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    message: message
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetEtymologyTest(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var testSheet = ss.getSheetByName('test');
+  
+  if (!testSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'テストデータが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // テストシートからデータを取得（ヘッダー行を除く）
+  var data = testSheet.getDataRange().getValues();
+  var questions = [];
+  
+  // 1行目はヘッダーなのでスキップ
+  for (var i = 1; i < data.length; i++) {
+    if (data[i][0] && data[i][1]) {  // 単語と語源が存在する場合
+      var question = {
+        word: data[i][0],
+        etymology: data[i][1],
+        meaning: data[i][2] || '',
+        correctAnswer: data[i][1],
+        // 選択肢は後でクライアント側で生成
+      };
+      questions.push(question);
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    questions: questions
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleCreateUserSheet(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersSheet = ss.getSheetByName('Users');
+  
+  if (!usersSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーデータが存在しません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーの行を見つける
+  var userData = usersSheet.getDataRange().getValues();
+  var username = '';
+  
+  for (var i = 1; i < userData.length; i++) {
+    if (userData[i][2] === payload.email) {
+      username = userData[i][1];
+      break;
+    }
+  }
+  
+  if (!username) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザー名のシートが既に存在するかチェック
+  var userSheet = ss.getSheetByName(username);
+  
+  if (!userSheet) {
+    // 新しいシートを作成
+    userSheet = ss.insertSheet(username);
+    userSheet.appendRow(['既知の語源']);
+    userSheet.setFrozenRows(1);
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    message: 'ユーザーシートが作成されました。'
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleSaveTestProgress(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersSheet = ss.getSheetByName('Users');
+  
+  if (!usersSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーデータが存在しません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーの行を見つける
+  var userData = usersSheet.getDataRange().getValues();
+  var username = '';
+  
+  for (var i = 1; i < userData.length; i++) {
+    if (userData[i][2] === payload.email) {
+      username = userData[i][1];
+      break;
+    }
+  }
+  
+  if (!username) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーシートを取得
+  var userSheet = ss.getSheetByName(username);
+  
+  if (!userSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーシートが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // B列に進捗データをJSON形式で保存
+  var progressData = {
+    currentQuestionIndex: payload.currentQuestionIndex,
+    knownEtymologies: payload.knownEtymologies,
+    timestamp: new Date().toISOString()
+  };
+  
+  userSheet.getRange(1, 2).setValue('テスト進捗');
+  userSheet.getRange(2, 2).setValue(JSON.stringify(progressData));
+  
+  // A列の既存データをクリア（ヘッダー行を除く）
+  var lastRow = userSheet.getLastRow();
+  if (lastRow > 1) {
+    userSheet.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+  
+  // 既知の語源をA列に保存
+  if (payload.knownEtymologies && payload.knownEtymologies.length > 0) {
+    var knownValues = payload.knownEtymologies.map(function(item) { return [item]; });
+    userSheet.getRange(2, 1, knownValues.length, 1).setValues(knownValues);
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    message: 'テスト進捗が保存されました。'
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetTestProgress(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersSheet = ss.getSheetByName('Users');
+  
+  if (!usersSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーデータが存在しません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーの行を見つける
+  var userData = usersSheet.getDataRange().getValues();
+  var username = '';
+  
+  for (var i = 1; i < userData.length; i++) {
+    if (userData[i][2] === payload.email) {
+      username = userData[i][1];
+      break;
+    }
+  }
+  
+  if (!username) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーシートを取得
+  var userSheet = ss.getSheetByName(username);
+  
+  if (!userSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      progress: null
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // B2セルから進捗データを取得
+  var progressDataStr = userSheet.getRange(2, 2).getValue();
+  
+  if (!progressDataStr) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      progress: null
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  try {
+    var progressData = JSON.parse(progressDataStr);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      progress: progressData
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      progress: null
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function handleSaveEtymologyTestResult(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersSheet = ss.getSheetByName('Users');
+  
+  if (!usersSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーデータが存在しません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーの行を見つける
+  var userData = usersSheet.getDataRange().getValues();
+  var username = '';
+  
+  for (var i = 1; i < userData.length; i++) {
+    if (userData[i][2] === payload.email) {
+      username = userData[i][1];
+      break;
+    }
+  }
+  
+  if (!username) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザー名のシートを取得（既に存在するはず）
+  var userSheet = ss.getSheetByName(username);
+  
+  if (!userSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーシートが見つかりません。先にテストを開始してください。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // 既存のデータをクリア（ヘッダー行を除く）
+  var lastRow = userSheet.getLastRow();
+  if (lastRow > 1) {
+    userSheet.getRange(2, 1, lastRow - 1, 1).clearContent();
+  }
+  
+  // 既知の語源を保存
+  if (payload.knownEtymologies && payload.knownEtymologies.length > 0) {
+    var knownValues = payload.knownEtymologies.map(function(item) { return [item]; });
+    userSheet.getRange(2, 1, knownValues.length, 1).setValues(knownValues);
+  }
+  
+  // テスト完了したので進捗データをクリア
+  userSheet.getRange(2, 2).clearContent();
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    message: '診断結果が保存されました。'
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetKnownEtymologies(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var usersSheet = ss.getSheetByName('Users');
+  
+  if (!usersSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーデータが存在しません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザーの行を見つける
+  var userData = usersSheet.getDataRange().getValues();
+  var username = '';
+  
+  for (var i = 1; i < userData.length; i++) {
+    if (userData[i][2] === payload.email) {
+      username = userData[i][1];
+      break;
+    }
+  }
+  
+  if (!username) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'ユーザーが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // ユーザー名のシートを取得
+  var userSheet = ss.getSheetByName(username);
+  
+  if (!userSheet) {
+    // シートが存在しない場合は空配列を返す（未診断）
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      knownEtymologies: []
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // 既知の語源を取得
+  var data = userSheet.getDataRange().getValues();
+  var knownEtymologies = [];
+  
+  for (var j = 1; j < data.length; j++) {
+    if (data[j][0]) {
+      knownEtymologies.push(data[j][0]);
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    knownEtymologies: knownEtymologies
   })).setMimeType(ContentService.MimeType.JSON);
 }
 

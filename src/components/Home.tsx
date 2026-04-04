@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusSquare, BookOpen, ClipboardCheck, Share2, LogOut, Settings } from 'lucide-react';
+import { PlusSquare, BookOpen, ClipboardCheck, Share2, LogOut, Settings, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Home: React.FC = () => {
@@ -8,6 +8,7 @@ export const Home: React.FC = () => {
   const menuItems = [
     { id: 'create', title: '単語帳作成', icon: <PlusSquare size={32} />, color: '#3b82f6' }, // Blue 500
     { id: 'learn', title: '学習', icon: <BookOpen size={32} />, color: '#60a5fa' }, // Blue 400
+    { id: 'diagnosis', title: '語源力診断', icon: <Activity size={32} />, color: '#8b5cf6' }, // Violet 500
     { id: 'test', title: 'テスト', icon: <ClipboardCheck size={32} />, color: '#0ea5e9' }, // Sky 500
     { id: 'share', title: '共有', icon: <Share2 size={32} />, color: '#0284c7' }, // Sky 600
   ];
@@ -33,13 +34,17 @@ export const Home: React.FC = () => {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
           {menuItems.map((item) => (
             <button
               key={item.id}
               onClick={() => {
                 if (item.id === 'create') {
                   navigate('/flashcards');
+                } else if (item.id === 'learn') {
+                  navigate('/learn');
+                } else if (item.id === 'diagnosis') {
+                  navigate('/etymology-test');
                 }
               }}
               style={{
@@ -91,15 +96,18 @@ export const Home: React.FC = () => {
           <div>
             <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>{localStorage.getItem('username') || 'Guest User'}</p>
           </div>
-          <button 
-            onClick={() => navigate('/profile')}
-            className="text-link" 
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.1)', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--panel-border)', color: 'var(--text-primary)' }}
-          >
-            <Settings size={16} /> Edit Profile
-          </button>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button 
+              onClick={() => navigate('/profile')}
+              className="text-link" 
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(255,255,255,0.1)', padding: '8px 12px', borderRadius: '10px', border: '1px solid var(--panel-border)', color: 'var(--text-primary)' }}
+            >
+              <Settings size={16} /> Edit Profile
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 };
+
