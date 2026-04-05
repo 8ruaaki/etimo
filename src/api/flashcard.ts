@@ -194,6 +194,30 @@ export const getFlashcardList = async (email: string) => {
   }
 };
 
+// 単語帳に単語を追加（保存）
+export const addWordToFlashcard = async (email: string, title: string, rowData: string[]) => {
+  if (!GAS_WEB_APP_URL) {
+    console.warn('VITE_GAS_WEB_APP_URL is not set. Simulating success.');
+    return { success: true };
+  }
+
+  try {
+    const response = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'addWordToFlashcard',
+        email,
+        title,
+        rowData
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to add word to flashcard:', error);
+    throw error;
+  }
+};
 // 単語帳を作成
 export const createFlashcard = async (email: string, title: string) => {
   if (!GAS_WEB_APP_URL) {
@@ -238,6 +262,31 @@ export const deleteFlashcard = async (email: string, title: string) => {
     return await response.json();
   } catch (error) {
     console.error('Failed to delete flashcard:', error);
+    throw error;
+  }
+};
+
+// 特定の単語を単語帳から削除
+export const deleteWordFromFlashcard = async (email: string, title: string, word: string) => {
+  if (!GAS_WEB_APP_URL) {
+    console.warn('VITE_GAS_WEB_APP_URL is not set. Simulating success.');
+    return { success: true };
+  }
+
+  try {
+    const response = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'deleteWordFromFlashcard',
+        email,
+        title,
+        word
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to delete word from flashcard:', error);
     throw error;
   }
 };

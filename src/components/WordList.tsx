@@ -1,17 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getFlashcard } from '../api/flashcard';
-import { PlusCircle, ArrowLeft, BookOpen } from 'lucide-react';
+import { getFlashcard, deleteWordFromFlashcard } from '../api/flashcard';
+import { PlusCircle, ArrowLeft, BookOpen, Trash2 } from 'lucide-react';
+
+interface FlashcardWord {
+  word: string;
+  meaning: string;
+}
 
 export const WordList: React.FC = () => {
   const { title } = useParams<{ title: string }>();
   const navigate = useNavigate();
-  const [words, setWords] = useState<any[]>([]);
+  const [words, setWords] = useState<FlashcardWord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadWords();
+    if (title) {
+      loadWords();
+    }
   }, [title]);
 
   const loadWords = async () => {
@@ -27,7 +34,8 @@ export const WordList: React.FC = () => {
 
       const result = await getFlashcard(email, decodeURIComponent(title));
       if (result.success) {
-        setWords(result.words || []);
+        // バックエンドが返す形式（flashcardsキーの配列）に対応
+        setWords(result.flashcards || result.words || []);
       } else {
         setError(result.error || '単語の取得に失敗しました。');
       }
@@ -36,6 +44,27 @@ export const WordList: React.FC = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteWord = async (wordToDelete: string) => {
+    if (!window.confirm(`「${wordToDelete}」を削除してもよろしいですか？`)) return;
+
+    try {
+      const email = localStorage.getItem('email');
+      if (!email) throw new Error('ログイン情報が見つかりません。');
+      if (!title) return;
+
+      const result = await deleteWordFromFlashcard(email, decodeURIComponent(title), wordToDelete);
+      if (result.success) {
+        // UIから削除
+        setWords((prev) => prev.filter(w => w.word !== wordToDelete));
+      } else {
+        alert(result.error || '削除に失敗しました。');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message || '削除中にエラーが発生しました。');
     }
   };
 
@@ -102,12 +131,38 @@ export const WordList: React.FC = () => {
             >
               <div>
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '4px' }}>
-                  {wordObj.word || wordObj}
+                  {wordObj.word}
                 </h3>
                 {wordObj.meaning && (
                   <p style={{ color: 'var(--text-secondary)' }}>{wordObj.meaning}</p>
                 )}
               </div>
+              <button
+                onClick={() => handleDeleteWord(wordObj.word)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '8px',
+                  borderRadius: '8px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = '#ef4444';
+                  e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--text-secondary)';
+                  e.currentTarget.style.background = 'transparent';
+                }}
+                title="単語を削除"
+              >
+                <Trash2 size={18} />
+              </button>
             </div>
           ))}
         </div>
@@ -124,7 +179,7 @@ export const WordList: React.FC = () => {
         style={{
           position: 'fixed',
           bottom: '40px',
-          left: '40px', // or right: 40px, but FlashcardList uses left: 40px
+          left: '40px',
           width: '60px',
           height: '60px',
           background: 'var(--accent-color)',

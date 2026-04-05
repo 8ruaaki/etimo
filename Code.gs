@@ -22,6 +22,9 @@ function doPost(e) {
     if (action === 'createFlashcard') {
       return handleCreateFlashcard(payload);
     }
+    if (action === 'addWordToFlashcard') {
+      return handleAddWordToFlashcard(payload);
+    }
     if (action === 'getFlashcardList') {
       return handleGetFlashcardList(payload);
     }
@@ -36,6 +39,9 @@ function doPost(e) {
     }
     if (action === 'deleteFlashcard') {
       return handleDeleteFlashcard(payload);
+    }
+    if (action === 'deleteWordFromFlashcard') {
+      return handleDeleteWordFromFlashcard(payload);
     }
     if (action === 'saveQuiz') {
       return handleSaveQuiz(payload);
@@ -266,6 +272,29 @@ function handleCreateFlashcard(payload) {
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
+function handleAddWordToFlashcard(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  
+  // 単語帳タイトル + メールアドレスでシート名を構築
+  var sheetName = payload.title + '_' + payload.email;
+  var flashcardSheet = ss.getSheetByName(sheetName);
+  
+  if (!flashcardSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '指定された単語帳（シート）が見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // シートにデータを追加
+  flashcardSheet.appendRow(payload.rowData);
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    message: '単語が追加されました。'
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
 function handleGetFlashcardList(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var usersSheet = ss.getSheetByName('Users');
@@ -324,27 +353,21 @@ function handleGetFlashcard(payload) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
-  // シートのデータを取得（ヘッダー行を除く）
+  // シートのデータを取得
   var data = flashcardSheet.getDataRange().getValues();
   var flashcards = [];
   
-  // 1行目はヘッダーなのでスキップ
-  for (var i = 1; i < data.length; i++) {
+  // もし1行目がヘッダー（'単語'）ならスキップするため、開始インデックスを決定
+  var startIndex = (data.length > 0 && data[0][0] === '単語') ? 1 : 0;
+  
+  for (var i = startIndex; i < data.length; i++) {
+    // 空行はスキップ
+    if (!data[i][0]) continue;
+
     var flashcard = {
-      word: data[i][0] || '',
-      etymology: data[i][1] || '',
-      meaning: data[i][2] || ''
+      word: data[i][0] || '', // A列: 単語
+      meaning: data[i][1] || '' // B列: 意味
     };
-    
-    // D列にクイズデータがある場合はパースして追加
-    if (data[i][3]) {
-      try {
-        flashcard.quiz = JSON.parse(data[i][3]);
-      } catch (e) {
-        // JSONパースエラーの場合は無視
-        Logger.log('Failed to parse quiz data for word: ' + data[i][0]);
-      }
-    }
     
     flashcards.push(flashcard);
   }
@@ -352,7 +375,7 @@ function handleGetFlashcard(payload) {
   return ContentService.createTextOutput(JSON.stringify({ 
     success: true, 
     title: payload.title,
-    flashcards: flashcards
+    flashcards: flashcards // payload is returned as flashcards per older implementation
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -524,6 +547,46 @@ function handleDeleteFlashcard(payload) {
     success: true, 
     message: '単語帳が削除されました。'
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleDeleteWordFromFlashcard(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = payload.title + '_' + payload.email;
+  var flashcardSheet = ss.getSheetByName(sheetName);
+  
+  if (!flashcardSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '単語帳が見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  var data = flashcardSheet.getDataRange().getValues();
+  var wordToDelete = payload.word;
+  var deleted = false;
+  
+  // ヘッダー行をスキップするかどうかの判定
+  var startIndex = (data.length > 0 && data[0][0] === '単語') ? 1 : 0;
+  
+  // 下から上に向かってループし、一致する単語の行を削除（複数ある場合はすべて削除）
+  for (var i = data.length - 1; i >= startIndex; i--) {
+    if (data[i][0] === wordToDelete) {
+      flashcardSheet.deleteRow(i + 1); // 1-indexed
+      deleted = true;
+    }
+  }
+  
+  if (deleted) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      message: '単語が削除されました。'
+    })).setMimeType(ContentService.MimeType.JSON);
+  } else {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '指定された単語が見つかりませんでした。'
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function handleSaveQuiz(payload) {

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight } from 'lucide-react';
-import { getKnownEtymologies } from '../api/flashcard';
+import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight, ArrowDown, Plus, RefreshCcw } from 'lucide-react';
+import { getKnownEtymologies, addWordToFlashcard } from '../api/flashcard';
 import { checkEtymologyMatch, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD';
@@ -15,7 +15,10 @@ export const WordRegistration: React.FC = () => {
   const [freeText, setFreeText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [etymologyInfo, setEtymologyInfo] = useState<string>('');
+  const [targetWordMeaning, setTargetWordMeaning] = useState<string>('');
   const [etymologyParts, setEtymologyParts] = useState<EtymologyPart[]>([]);
+
+  const [isSaving, setIsSaving] = useState(false);
 
   // ── Step: 単語入力 ──────────────────────────────────────────
   const handleJudge = async () => {
@@ -37,6 +40,7 @@ export const WordRegistration: React.FC = () => {
 
       if (matchResult.matched) {
         setEtymologyInfo(matchResult.explanation ?? '');
+        setTargetWordMeaning(matchResult.targetWordMeaning ?? '');
         setEtymologyParts(matchResult.parts ?? []);
         setStep('screenA');
       } else {
@@ -57,6 +61,27 @@ export const WordRegistration: React.FC = () => {
     setStep('input');
     setFreeText('');
     setError(null);
+  };
+
+  const handleSaveToSheet = async (rowData: string[]) => {
+    try {
+      const email = localStorage.getItem('email');
+      if (!email) throw new Error('ログイン情報がありません。');
+      if (!title) throw new Error('単語帳のタイトルが不明です。');
+
+      setIsSaving(true);
+      const result = await addWordToFlashcard(email, title, rowData);
+      if (result && !result.success) {
+        throw new Error(result.error || 'サーバーでエラーが発生しました。');
+      }
+      alert('カードを保存しました！');
+      navigate(`/flashcards/${encodeURIComponent(title)}`);
+    } catch (err: any) {
+      console.error(err);
+      alert(err.message ?? '保存に失敗しました。');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // ─────────────────── レンダリング ───────────────────────────
@@ -106,9 +131,12 @@ export const WordRegistration: React.FC = () => {
         {step === 'screenA' && (
           <ScreenA
             word={word}
+            targetWordMeaning={targetWordMeaning}
             etymologyInfo={etymologyInfo}
             etymologyParts={etymologyParts}
             onBack={backToInput}
+            onSave={handleSaveToSheet}
+            isSaving={isSaving}
             flashcardTitle={title ?? ''}
           />
         )}
@@ -287,11 +315,37 @@ const JudgingStep: React.FC = () => (
 // ══════════════════════════════════════════════════════════════
 const ScreenA: React.FC<{
   word: string;
+  targetWordMeaning: string;
   etymologyInfo: string;
   etymologyParts: EtymologyPart[];
   onBack: () => void;
+  onSave: (rowData: string[]) => void;
+  isSaving: boolean;
   flashcardTitle: string;
-}> = ({ word, etymologyInfo, etymologyParts, onBack, flashcardTitle: _flashcardTitle }) => (
+}> = ({ word, targetWordMeaning, etymologyInfo, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle }) => {
+  const [relatedWordIndices, setRelatedWordIndices] = useState<Record<number, number>>({});
+
+  const handleRefreshRelatedWord = (partIndex: number, maxWords: number) => {
+    setRelatedWordIndices((prev) => {
+      const currentIndex = prev[partIndex] || 0;
+      return {
+        ...prev,
+        [partIndex]: (currentIndex + 1) % maxWords,
+      };
+    });
+  };
+
+  const handleSaveClick = () => {
+    const rowData: string[] = [word, targetWordMeaning];
+    etymologyParts.forEach((part, idx) => {
+      const selectedRelatedWord = part.relatedWords?.[relatedWordIndices[idx] || 0];
+      rowData.push(part.part);
+      rowData.push(selectedRelatedWord ? `${selectedRelatedWord.word} (${selectedRelatedWord.meaning})` : '');
+    });
+    onSave(rowData);
+  };
+
+  return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
     <div
       style={{
@@ -314,9 +368,14 @@ const ScreenA: React.FC<{
 
     {/* 対象単語 */}
     <div style={{ textAlign: 'center', margin: '16px 0' }}>
-      <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+      <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
         {word}
       </h3>
+      {targetWordMeaning && (
+        <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {targetWordMeaning}
+        </p>
+      )}
     </div>
 
     {/* 語源の分解と意味 */}
@@ -326,52 +385,89 @@ const ScreenA: React.FC<{
           語源で分解
         </h4>
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {etymologyParts.map((part, idx) => (
-            <div key={idx} style={{ 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '12px',
-              padding: '16px',
-              background: 'rgba(15, 23, 42, 0.4)',
-              borderRadius: '12px',
-              border: '1px solid rgba(255,255,255,0.05)'
-            }}>
-              {/* パーツと意味 */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <React.Fragment key={idx}>
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center',
+                gap: '8px',
+                width: '200px'
+              }}>
+                {/* パーツ */}
                 <div style={{ 
                   background: 'rgba(16,185,129,0.15)', 
                   color: '#10b981', 
                   padding: '8px 16px', 
                   borderRadius: '8px',
                   fontWeight: 700,
-                  fontSize: '1.2rem',
-                  minWidth: '80px',
-                  textAlign: 'center'
+                  fontSize: '1.4rem',
+                  textAlign: 'center',
+                  width: '100%'
                 }}>
                   {part.part}
                 </div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 500 }}>
+                
+                {/* 下向き矢印 */}
+                <div style={{ color: 'var(--text-secondary)' }}>
+                  <ArrowDown size={20} />
+                </div>
+                
+                {/* 意味 */}
+                <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
                   {part.meaning}
                 </div>
-              </div>
 
-              {/* 関連語（同じ語源を持つ簡単な単語） */}
-              <div style={{ 
-                marginLeft: '16px',
-                paddingLeft: '16px',
-                borderLeft: '2px solid rgba(255,255,255,0.1)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '4px'
-              }}>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>同じ語源を持つ単語</p>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '12px' }}>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#60a5fa' }}>{part.relatedWord}</span>
-                  <span style={{ fontSize: '0.95rem', color: 'var(--text-secondary)' }}>{part.relatedWordMeaning}</span>
+                {/* 関連語 */}
+                <div style={{ 
+                  marginTop: '8px',
+                  padding: '12px',
+                  background: 'rgba(15, 23, 42, 0.4)',
+                  borderRadius: '12px',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                  width: '100%'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>同じ語源の単語</p>
+                    {part.relatedWords && part.relatedWords.length > 1 && (
+                      <button
+                        onClick={() => handleRefreshRelatedWord(idx, part.relatedWords.length)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          padding: '2px 4px',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        <RefreshCcw size={12} />
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                    <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#60a5fa' }}>
+                      {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.word}
+                    </span>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                      {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.meaning}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
+              {idx < etymologyParts.length - 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
+                  <Plus size={24} color="var(--text-secondary)" />
+                </div>
+              )}
+            </React.Fragment>
           ))}
         </div>
       </div>
@@ -428,13 +524,15 @@ const ScreenA: React.FC<{
         id="screen-a-save-btn"
         className="btn-primary"
         style={{ flex: 1 }}
-        onClick={() => alert('（仮）カードが保存されました！')}
+        onClick={handleSaveClick}
+        disabled={isSaving}
       >
-        <BookOpen size={16} /> カードを保存
+        <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
       </button>
     </div>
   </div>
-);
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // 画面 B: 自由連想入力
