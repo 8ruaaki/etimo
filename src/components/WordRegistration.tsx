@@ -1139,7 +1139,31 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
           {isLoading ? (
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>偽語源を生成中...</p>
           ) : (
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fakeEtymology}</p>
+            <textarea
+              value={fakeEtymology}
+              onChange={(e) => setFakeEtymology(e.target.value)}
+              style={{
+                width: '100%',
+                minHeight: '120px',
+                padding: '12px',
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '8px',
+                resize: 'vertical',
+                outline: 'none',
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--primary-color)';
+                e.target.style.background = 'rgba(255,255,255,0.05)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--panel-border)';
+                e.target.style.background = 'rgba(255,255,255,0.02)';
+              }}
+            />
           )}
         </div>
       </div>
@@ -1281,7 +1305,31 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
           {isLoading ? (
             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>関連性を生成中...</p>
           ) : (
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fakeRelationship}</p>
+            <textarea
+              value={fakeRelationship}
+              onChange={(e) => setFakeRelationship(e.target.value)}
+              style={{
+                width: '100%',
+                minHeight: '120px',
+                padding: '12px',
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '8px',
+                resize: 'vertical',
+                outline: 'none',
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--primary-color)';
+                e.target.style.background = 'rgba(255,255,255,0.05)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--panel-border)';
+                e.target.style.background = 'rgba(255,255,255,0.02)';
+              }}
+            />
           )}
         </div>
       </div>
@@ -1423,7 +1471,31 @@ const ScreenE: React.FC<{ word: string; meaning: string; freeText: string; onBac
           {isLoading ? (
              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>情景を生成中...</p>
           ) : (
-             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fakeStory}</p>
+             <textarea
+              value={fakeStory}
+              onChange={(e) => setFakeStory(e.target.value)}
+              style={{
+                width: '100%',
+                minHeight: '120px',
+                padding: '12px',
+                fontSize: '0.9rem',
+                color: 'var(--text-secondary)',
+                lineHeight: 1.6,
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid var(--panel-border)',
+                borderRadius: '8px',
+                resize: 'vertical',
+                outline: 'none',
+              }}
+              onFocus={(e) => {
+                e.target.style.borderColor = 'var(--primary-color)';
+                e.target.style.background = 'rgba(255,255,255,0.05)';
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = 'var(--panel-border)';
+                e.target.style.background = 'rgba(255,255,255,0.02)';
+              }}
+            />
           )}
         </div>
       </div>
