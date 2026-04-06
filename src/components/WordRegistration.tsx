@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight, ArrowDown, Plus, RefreshCcw } from 'lucide-react';
 import { getKnownEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, suggestSimilarWords, suggestOtherAssociations, suggestMnemonic, type EtymologyPart } from '../api/wordRegistration';
+import { checkEtymologyMatch, suggestSimilarWords, suggestOtherAssociations, suggestMnemonic, generateFakeEtymology, generateFakeRelationship, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
@@ -16,6 +16,7 @@ export const WordRegistration: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [etymologyInfo, setEtymologyInfo] = useState<string>('');
   const [targetWordMeaning, setTargetWordMeaning] = useState<string>('');
+  const [integratedMeaning, setIntegratedMeaning] = useState<string>('');
   const [etymologyParts, setEtymologyParts] = useState<EtymologyPart[]>([]);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -51,6 +52,7 @@ export const WordRegistration: React.FC = () => {
       if (matchResult.matched) {
         setEtymologyInfo(matchResult.explanation ?? '');
         setEtymologyParts(matchResult.parts ?? []);
+        setIntegratedMeaning(matchResult.integratedMeaning ?? '');
         setStep('screenA');
       } else {
         setStep('screenB');
@@ -138,12 +140,14 @@ export const WordRegistration: React.FC = () => {
           <ScreenA
             word={word}
             targetWordMeaning={targetWordMeaning}
+            integratedMeaning={integratedMeaning}
             etymologyInfo={etymologyInfo}
             etymologyParts={etymologyParts}
             onBack={backToInput}
             onSave={handleSaveToSheet}
             isSaving={isSaving}
             flashcardTitle={title ?? ''}
+            onGoToScreenB={() => setStep('screenB')}
           />
         )}
         {step === 'screenB' && (
@@ -156,16 +160,17 @@ export const WordRegistration: React.FC = () => {
             onOther={() => setStep('screenD')}
             onMnemonic={() => setStep('screenE')}
             onBack={backToInput}
+            onGoToScreenA={() => setStep('screenA')}
           />
         )}
         {step === 'screenC' && (
-          <ScreenC word={word} freeText={freeText} onBack={() => setStep('screenB')} flashcardTitle={title ?? ''} />
+          <ScreenC word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
         {step === 'screenD' && (
-          <ScreenD word={word} freeText={freeText} onBack={() => setStep('screenB')} flashcardTitle={title ?? ''} />
+          <ScreenD word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
         {step === 'screenE' && (
-          <ScreenE word={word} freeText={freeText} onBack={() => setStep('screenB')} flashcardTitle={title ?? ''} />
+          <ScreenE word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
       </div>
     </div>
@@ -260,13 +265,15 @@ const JudgingStep: React.FC = () => (
 const ScreenA: React.FC<{
   word: string;
   targetWordMeaning: string;
+  integratedMeaning: string;
   etymologyInfo: string;
   etymologyParts: EtymologyPart[];
   onBack: () => void;
   onSave: (rowData: string[]) => void;
   isSaving: boolean;
   flashcardTitle: string;
-}> = ({ word, targetWordMeaning, etymologyInfo, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle }) => {
+  onGoToScreenB: () => void;
+}> = ({ word, targetWordMeaning, integratedMeaning, etymologyInfo, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToScreenB }) => {
   const [relatedWordIndices, setRelatedWordIndices] = useState<Record<number, number>>({});
 
   const handleRefreshRelatedWord = (partIndex: number, maxWords: number) => {
@@ -280,7 +287,7 @@ const ScreenA: React.FC<{
   };
 
   const handleSaveClick = () => {
-    const rowData: string[] = [word, targetWordMeaning];
+    const rowData: string[] = ['0', word, targetWordMeaning];
     etymologyParts.forEach((part, idx) => {
       const selectedRelatedWord = part.relatedWords?.[relatedWordIndices[idx] || 0];
       rowData.push(part.part);
@@ -414,6 +421,43 @@ const ScreenA: React.FC<{
               </React.Fragment>
             ))}
           </div>
+
+          {integratedMeaning && (
+            <div style={{
+              marginTop: '24px',
+              padding: '24px',
+              background: 'rgba(16,185,129,0.05)',
+              border: '1px solid rgba(16,185,129,0.2)',
+              borderRadius: '16px',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '20px', fontWeight: 600 }}>パーツの統合イメージ</p>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                {integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean).map((step, idx, arr) => (
+                  <React.Fragment key={idx}>
+                    <div style={{
+                      padding: '12px 24px',
+                      background: 'rgba(16,185,129,0.12)',
+                      border: '1px solid rgba(16,185,129,0.3)',
+                      borderRadius: '10px',
+                      fontSize: '1.2rem',
+                      fontWeight: 700,
+                      color: '#10b981',
+                      letterSpacing: '0.05em',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                    }}>
+                      {step}
+                    </div>
+                    {idx < arr.length - 1 && (
+                      <div style={{ color: 'rgba(16,185,129,0.5)', padding: '6px 0' }}>
+                        <ArrowDown size={28} />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -430,6 +474,36 @@ const ScreenA: React.FC<{
           <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{etymologyInfo}</p>
         </div>
       )}
+
+      {/* 別の方法で暗記するボタン */}
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+        <button
+          onClick={onGoToScreenB}
+          style={{
+            background: 'transparent',
+            border: '1px solid var(--accent-color)',
+            color: 'var(--accent-color)',
+            borderRadius: '999px',
+            padding: '8px 24px',
+            fontSize: '0.95rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'rgba(59, 130, 246, 0.1)';
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+          }}
+        >
+          <Lightbulb size={16} />
+          別の方法（連想・語呂合わせ等）で暗記する
+        </button>
+      </div>
 
       {/* 仮ページである旨 */}
       <div
@@ -490,7 +564,8 @@ const ScreenB: React.FC<{
   onOther: () => void;
   onMnemonic: () => void;
   onBack: () => void;
-}> = ({ word, targetWordMeaning, freeText, setFreeText, onSimilarWord, onOther, onMnemonic, onBack }) => {
+  onGoToScreenA?: () => void;
+}> = ({ word, targetWordMeaning, freeText, setFreeText, onSimilarWord, onOther, onMnemonic, onBack, onGoToScreenA }) => {
   const [selection, setSelection] = useState<'similar' | 'other' | 'mnemonic' | null>(null);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -618,8 +693,39 @@ const ScreenB: React.FC<{
           border: '1px solid var(--panel-border)',
           borderRadius: '16px',
           textAlign: 'center',
+          position: 'relative',
         }}
       >
+        {onGoToScreenA && (
+          <button
+            onClick={onGoToScreenA}
+            style={{
+              position: 'absolute',
+              top: '16px',
+              right: '16px',
+              background: 'transparent',
+              border: '1px solid #10b981',
+              color: '#10b981',
+              borderRadius: '999px',
+              padding: '6px 16px',
+              fontSize: '0.85rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(16, 185, 129, 0.1)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
+            }}
+          >
+            語源で覚える <ArrowRight size={14} />
+          </button>
+        )}
         <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>{word}</h3>
         {targetWordMeaning && (
           <p style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -923,168 +1029,430 @@ const ChoiceCard: React.FC<{
 // ══════════════════════════════════════════════════════════════
 // 画面 C（仮）: 似た英単語から暗記
 // ══════════════════════════════════════════════════════════════
-const ScreenC: React.FC<{ word: string; freeText: string; onBack: () => void; flashcardTitle: string }> = ({
+const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBack: () => void; onSave: (rowData: string[]) => void; isSaving: boolean; flashcardTitle: string }> = ({
   word,
+  meaning,
   freeText,
   onBack,
+  onSave,
+  isSaving,
   flashcardTitle: _flashcardTitleC,
-}) => (
-  <PlaceholderScreen
-    badge="🔤 画面C：類語から暗記"
-    badgeColor="#6366f1"
-    label="入力した類語"
-    word={word}
-    freeText={freeText}
-    description={`「${freeText}」という類語のイメージで「${word}」を覚えます。`}
-    devNote="このページは現在開発中です（画面C：類語暗記）"
-    onBack={onBack}
-    onSave={() => alert('（仮）カードが保存されました！')}
-    saveId="screen-c-save-btn"
-    backLabel="連想入力に戻る"
-  />
-);
+}) => {
+  const [fakeEtymology, setFakeEtymology] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const fetchFakeEtymology = async () => {
+    setIsLoading(true);
+    try {
+      const result = await generateFakeEtymology(word, meaning, freeText);
+      setFakeEtymology(result);
+    } catch (err) {
+      console.error(err);
+      setFakeEtymology('偽語源の生成に失敗しました。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const initFetch = async () => {
+      setIsLoading(true);
+      try {
+        const result = await generateFakeEtymology(word, meaning, freeText);
+        if (isMounted) setFakeEtymology(result);
+      } catch (err) {
+        console.error(err);
+        if (isMounted) setFakeEtymology('偽語源の生成に失敗しました。');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    initFetch();
+    return () => { isMounted = false; };
+  }, [word, meaning, freeText]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div
+        style={{
+          padding: '6px 14px',
+          background: `rgba(${hexToRgb('#6366f1')}, 0.15)`,
+          border: `1px solid rgba(${hexToRgb('#6366f1')}, 0.4)`,
+          borderRadius: '999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          width: 'fit-content',
+          color: '#6366f1',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+        }}
+      >
+        🔤 画面C：類語から暗記
+      </div>
+
+      <div
+        style={{
+          padding: '24px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>暗記単語</p>
+          <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '0.05em' }}>{word}</p>
+          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>{meaning}</p>
+        </div>
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>選んだ似た英単語</p>
+          <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>{freeText}</p>
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <p style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>語源</p>
+            <button
+              onClick={fetchFakeEtymology}
+              disabled={isLoading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                fontSize: '0.8rem',
+                color: isLoading ? 'var(--text-secondary)' : '#6366f1',
+                background: isLoading ? 'rgba(255,255,255,0.05)' : `rgba(${hexToRgb('#6366f1')}, 0.1)`,
+                border: `1px solid ${isLoading ? 'var(--panel-border)' : `rgba(${hexToRgb('#6366f1')}, 0.3)`}`,
+                borderRadius: '6px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <RefreshCcw size={12} className={isLoading ? 'spin-animation' : ''} />
+              {isLoading ? '生成中...' : '再生成'}
+            </button>
+          </div>
+          {isLoading ? (
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>偽語源を生成中...</p>
+          ) : (
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fakeEtymology}</p>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            flex: 1,
+            padding: '12px',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--panel-border)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            color: 'var(--text-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          }}
+        >
+          <ArrowLeft size={16} /> 連想入力に戻る
+        </button>
+        <button id="screen-c-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeEtymology])} disabled={isSaving}>
+          <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
-// 画面 D（仮）: 自由メモで暗記
+// 画面 D（仮）: カタカナ語から暗記
 // ══════════════════════════════════════════════════════════════
-const ScreenD: React.FC<{ word: string; freeText: string; onBack: () => void; flashcardTitle: string }> = ({
+const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBack: () => void; onSave: (rowData: string[]) => void; isSaving: boolean; flashcardTitle: string }> = ({
   word,
+  meaning,
   freeText,
   onBack,
+  onSave,
+  isSaving,
   flashcardTitle: _flashcardTitleD,
-}) => (
-  <PlaceholderScreen
-    badge="💭 画面D：自由メモで暗記"
-    badgeColor="#0ea5e9"
-    label="入力したメモ"
-    word={word}
-    freeText={freeText}
-    description={`「${freeText}」のイメージで「${word}」を覚えます。`}
-    devNote="このページは現在開発中です（画面D：自由メモ暗記）"
-    onBack={onBack}
-    onSave={() => alert('（仮）カードが保存されました！')}
-    saveId="screen-d-save-btn"
-    backLabel="連想入力に戻る"
-  />
-);
+}) => {
+  const [fakeRelationship, setFakeRelationship] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  const fetchFakeRelationship = async () => {
+    setIsLoading(true);
+    try {
+      const result = await generateFakeRelationship(word, meaning, freeText);
+      setFakeRelationship(result);
+    } catch (err) {
+      console.error(err);
+      setFakeRelationship('関連性の生成に失敗しました。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    const initFetch = async () => {
+      setIsLoading(true);
+      try {
+        const result = await generateFakeRelationship(word, meaning, freeText);
+        if (isMounted) setFakeRelationship(result);
+      } catch (err) {
+        console.error(err);
+        if (isMounted) setFakeRelationship('関連性の生成に失敗しました。');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    initFetch();
+    return () => { isMounted = false; };
+  }, [word, meaning, freeText]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div
+        style={{
+          padding: '6px 14px',
+          background: `rgba(${hexToRgb('#0ea5e9')}, 0.15)`,
+          border: `1px solid rgba(${hexToRgb('#0ea5e9')}, 0.4)`,
+          borderRadius: '999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          width: 'fit-content',
+          color: '#0ea5e9',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+        }}
+      >
+        💭 画面D：カタカナ語から暗記
+      </div>
+
+      <div
+        style={{
+          padding: '24px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>暗記単語</p>
+          <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '0.05em' }}>{word}</p>
+          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>{meaning}</p>
+        </div>
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>選んだカタカナ語</p>
+          <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>{freeText}</p>
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <p style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>関連性</p>
+            <button
+              onClick={fetchFakeRelationship}
+              disabled={isLoading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                fontSize: '0.8rem',
+                color: isLoading ? 'var(--text-secondary)' : '#0ea5e9',
+                background: isLoading ? 'rgba(255,255,255,0.05)' : `rgba(${hexToRgb('#0ea5e9')}, 0.1)`,
+                border: `1px solid ${isLoading ? 'var(--panel-border)' : `rgba(${hexToRgb('#0ea5e9')}, 0.3)`}`,
+                borderRadius: '6px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <RefreshCcw size={12} className={isLoading ? 'spin-animation' : ''} />
+              {isLoading ? '生成中...' : '再生成'}
+            </button>
+          </div>
+          {isLoading ? (
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>関連性を生成中...</p>
+          ) : (
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fakeRelationship}</p>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            flex: 1,
+            padding: '12px',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--panel-border)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            color: 'var(--text-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          }}
+        >
+          <ArrowLeft size={16} /> 連想入力に戻る
+        </button>
+        <button id="screen-d-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeRelationship])} disabled={isSaving}>
+          <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // 画面 E（仮）: 語呂合わせで暗記
 // ══════════════════════════════════════════════════════════════
-const ScreenE: React.FC<{ word: string; freeText: string; onBack: () => void; flashcardTitle: string }> = ({
+const ScreenE: React.FC<{ word: string; meaning: string; freeText: string; onBack: () => void; onSave: (rowData: string[]) => void; isSaving: boolean; flashcardTitle: string }> = ({
   word,
+  meaning,
   freeText,
   onBack,
+  onSave,
+  isSaving,
   flashcardTitle: _flashcardTitleE,
-}) => (
-  <PlaceholderScreen
-    badge="🤣 画面E：語呂合わせで暗記"
-    badgeColor="#f59e0b"
-    label="入力した語呂合わせ"
-    word={word}
-    freeText={freeText}
-    description={`「${freeText}」という語呂合わせで「${word}」を覚えます。`}
-    devNote="このページは現在開発中です（画面E：語呂合わせ暗記）"
-    onBack={onBack}
-    onSave={() => alert('（仮）カードが保存されました！')}
-    saveId="screen-e-save-btn"
-    backLabel="連想入力に戻る"
-  />
-);
+}) => {
+  const [fakeStory, setFakeStory] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
-// ── 仮ページ共通テンプレート ───────────────────────────────────
-const PlaceholderScreen: React.FC<{
-  badge: string;
-  badgeColor: string;
-  label: string;
-  word: string;
-  freeText: string;
-  description: string;
-  devNote: string;
-  onBack: () => void;
-  onSave: () => void;
-  saveId: string;
-  backLabel: string;
-}> = ({ badge, badgeColor, label, word, freeText, description, devNote, onBack, onSave, saveId, backLabel }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-    <div
-      style={{
-        padding: '6px 14px',
-        background: `rgba(${hexToRgb(badgeColor)}, 0.15)`,
-        border: `1px solid rgba(${hexToRgb(badgeColor)}, 0.4)`,
-        borderRadius: '999px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        width: 'fit-content',
-        color: badgeColor,
-        fontSize: '0.85rem',
-        fontWeight: 600,
-      }}
-    >
-      {badge}
-    </div>
+  const fetchFakeStory = async () => {
+    setIsLoading(true);
+    try {
+      const result = await generateMnemonicStory(word, meaning, freeText);
+      setFakeStory(result);
+    } catch (err) {
+      console.error(err);
+      setFakeStory('情景の生成に失敗しました。');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-    <div
-      style={{
-        padding: '24px',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid var(--panel-border)',
-        borderRadius: '16px',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
-      }}
-    >
-      <div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>暗記単語</p>
-        <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '0.05em' }}>{word}</p>
-      </div>
-      <div>
-        <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>{label}</p>
-        <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>{freeText}</p>
-      </div>
-      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{description}</p>
-    </div>
+  useEffect(() => {
+    let isMounted = true;
+    const initFetch = async () => {
+      setIsLoading(true);
+      try {
+        const result = await generateMnemonicStory(word, meaning, freeText);
+        if (isMounted) setFakeStory(result);
+      } catch (err) {
+        console.error(err);
+        if (isMounted) setFakeStory('情景の生成に失敗しました。');
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    initFetch();
+    return () => { isMounted = false; };
+  }, [word, meaning, freeText]);
 
-    <div
-      style={{
-        padding: '16px 20px',
-        background: 'rgba(234,179,8,0.1)',
-        border: '1px dashed rgba(234,179,8,0.4)',
-        borderRadius: '12px',
-        color: '#eab308',
-        fontSize: '0.85rem',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-      }}
-    >
-      🚧 {devNote}
-    </div>
-
-    <div style={{ display: 'flex', gap: '12px' }}>
-      <button
-        onClick={onBack}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div
         style={{
-          flex: 1,
-          padding: '12px',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid var(--panel-border)',
-          borderRadius: '10px',
-          cursor: 'pointer',
-          color: 'var(--text-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          padding: '6px 14px',
+          background: `rgba(${hexToRgb('#f59e0b')}, 0.15)`,
+          border: `1px solid rgba(${hexToRgb('#f59e0b')}, 0.4)`,
+          borderRadius: '999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          width: 'fit-content',
+          color: '#f59e0b',
+          fontSize: '0.85rem',
+          fontWeight: 600,
         }}
       >
-        <ArrowLeft size={16} /> {backLabel}
-      </button>
-      <button id={saveId} className="btn-primary" style={{ flex: 1 }} onClick={onSave}>
-        <BookOpen size={16} /> カードを保存（仮）
-      </button>
+        🤣 画面E：語呂合わせで暗記
+      </div>
+
+      <div
+        style={{
+          padding: '24px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '12px',
+        }}
+      >
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>暗記単語</p>
+          <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '0.05em' }}>{word}</p>
+          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>{meaning}</p>
+        </div>
+        <div>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>選んだ語呂合わせ</p>
+          <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>{freeText}</p>
+        </div>
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <p style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>語呂合わせから広がる情景</p>
+            <button
+              onClick={fetchFakeStory}
+              disabled={isLoading}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '4px 10px',
+                fontSize: '0.8rem',
+                color: isLoading ? 'var(--text-secondary)' : '#f59e0b',
+                background: isLoading ? 'rgba(255,255,255,0.05)' : `rgba(${hexToRgb('#f59e0b')}, 0.1)`,
+                border: `1px solid ${isLoading ? 'var(--panel-border)' : `rgba(${hexToRgb('#f59e0b')}, 0.3)`}`,
+                borderRadius: '6px',
+                cursor: isLoading ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s',
+              }}
+            >
+              <RefreshCcw size={12} className={isLoading ? 'spin-animation' : ''} />
+              {isLoading ? '生成中...' : '再生成'}
+            </button>
+          </div>
+          {isLoading ? (
+             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>情景を生成中...</p>
+          ) : (
+             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{fakeStory}</p>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            flex: 1,
+            padding: '12px',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--panel-border)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            color: 'var(--text-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          }}
+        >
+          <ArrowLeft size={16} /> 連想入力に戻る
+        </button>
+        <button id="screen-e-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeStory])} disabled={isSaving}>
+          <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
+        </button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
+
+
 
 // ── ユーティリティ: hex → "r,g,b" ─────────────────────────────
 function hexToRgb(hex: string): string {

@@ -248,10 +248,6 @@ function handleCreateFlashcard(payload) {
   // 新しいシートを作成
   var newSheet = ss.insertSheet(sheetName);
   
-  // ヘッダー行を追加
-  newSheet.appendRow(['単語', '語源', '意味']);
-  newSheet.setFrozenRows(1);
-  
   // Usersシートの作成者の行のE列以降にタイトルのみを追加
   // E列から始まる既存の単語帳リストを取得
   var lastColumn = usersSheet.getLastColumn();
@@ -357,16 +353,16 @@ function handleGetFlashcard(payload) {
   var data = flashcardSheet.getDataRange().getValues();
   var flashcards = [];
   
-  // もし1行目がヘッダー（'単語'）ならスキップするため、開始インデックスを決定
-  var startIndex = (data.length > 0 && data[0][0] === '単語') ? 1 : 0;
+  // 1行目からフェッチする
+  var startIndex = 0;
   
   for (var i = startIndex; i < data.length; i++) {
-    // 空行はスキップ
-    if (!data[i][0]) continue;
+    // 空行はスキップ（B列の単語が存在しない場合）
+    if (!data[i][1]) continue;
 
     var flashcard = {
-      word: data[i][0] || '', // A列: 単語
-      meaning: data[i][1] || '' // B列: 意味
+      word: data[i][1] || '', // B列: 単語
+      meaning: data[i][2] || '' // C列: 意味
     };
     
     flashcards.push(flashcard);
@@ -392,19 +388,16 @@ function handleUpdateFlashcard(payload) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
-  // 既存のデータを全て削除（ヘッダー行を除く）
-  var lastRow = flashcardSheet.getLastRow();
-  if (lastRow > 1) {
-    // 2行目から最終行までを削除
-    flashcardSheet.deleteRows(2, lastRow - 1);
-  }
+  // 既存のデータを全てクリア
+  flashcardSheet.clear();
   
   // 新しいデータを追加
   for (var i = 0; i < payload.flashcards.length; i++) {
     var card = payload.flashcards[i];
     // 空の単語カードはスキップ
-    if (card.word || card.etymology || card.meaning) {
-      flashcardSheet.appendRow([card.word, card.etymology, card.meaning]);
+    if (card.word || card.meaning) {
+      // 形式に合わせて['0'または'1', 単語, 意味]として保存する（旧形式の場合は便宜上'1'とする）
+      flashcardSheet.appendRow(['1', card.word, card.meaning]);
     }
   }
   
@@ -565,12 +558,12 @@ function handleDeleteWordFromFlashcard(payload) {
   var wordToDelete = payload.word;
   var deleted = false;
   
-  // ヘッダー行をスキップするかどうかの判定
-  var startIndex = (data.length > 0 && data[0][0] === '単語') ? 1 : 0;
+  // ヘッダー行をスキップしない（常に1行目から）
+  var startIndex = 0;
   
   // 下から上に向かってループし、一致する単語の行を削除（複数ある場合はすべて削除）
   for (var i = data.length - 1; i >= startIndex; i--) {
-    if (data[i][0] === wordToDelete) {
+    if (data[i][1] === wordToDelete) {
       flashcardSheet.deleteRow(i + 1); // 1-indexed
       deleted = true;
     }
@@ -605,8 +598,9 @@ function handleSaveQuiz(payload) {
   var data = flashcardSheet.getDataRange().getValues();
   var wordRowIndex = -1;
   
-  for (var i = 1; i < data.length; i++) {
-    if (data[i][0] === payload.word) {
+  // 1行目から検索
+  for (var i = 0; i < data.length; i++) {
+    if (data[i][1] === payload.word) {
       wordRowIndex = i + 1; // シートの行番号（1-indexed）
       break;
     }
@@ -619,10 +613,10 @@ function handleSaveQuiz(payload) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
-  // クイズデータをJSON文字列として保存（D列に保存）
+  // クイズデータをJSON文字列として保存（重複を避けるためT列(20列目)に保存）
   // payload.quizがnullの場合は空文字をセットしてクイズを削除する
   var quizValue = payload.quiz ? JSON.stringify(payload.quiz) : "";
-  flashcardSheet.getRange(wordRowIndex, 4).setValue(quizValue);
+  flashcardSheet.getRange(wordRowIndex, 20).setValue(quizValue);
   
   var message = payload.quiz ? 'クイズが保存されました。' : 'クイズが削除されました。';
   

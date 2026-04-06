@@ -23,6 +23,7 @@ export interface EtymologyCheckResult {
   matched: boolean;
   explanation?: string;
   targetWordMeaning?: string;
+  integratedMeaning?: string; // ←追加
   parts?: EtymologyPart[];
 }
 
@@ -40,9 +41,9 @@ function extractArrayFromResponse(rawText: string, arrayKey: string): string[] {
     return parsed[arrayKey] || [];
   } catch (err) {
     console.warn(`[JSON Parse Fallback] 途切れたJSONの修復を試みます。Raw: ${cleanText.substring(0, 100)}...`);
-    
+
     const results: string[] = [];
-    
+
     // 1. 完全に閉じられている文字列（"..."）をすべて抽出
     const strMatches = cleanText.match(/"([^"\\]*(?:\\.[^"\\]*)*)"/g);
     if (strMatches) {
@@ -56,18 +57,18 @@ function extractArrayFromResponse(rawText: string, arrayKey: string): string[] {
         }
       }
     }
-    
+
     // 2. 最後に閉じられていない文字列（" から末尾まで）があれば抽出
     const lastQuoteIdx = cleanText.lastIndexOf('"');
     if (lastQuoteIdx !== -1) {
       const afterLastQuote = cleanText.substring(lastQuoteIdx + 1);
       // もし末尾が ] や } で終わっていない＝文字列の途中で切れている場合
       if (!afterLastQuote.includes('"') && !afterLastQuote.includes(']') && !afterLastQuote.includes('}')) {
-         const partial = afterLastQuote.trim();
-         if (partial.length > 0 && partial !== arrayKey) {
-           // 途中で切れた文字列も結果に含める
-           results.push(partial + '（※AIの出力が途切れました）');
-         }
+        const partial = afterLastQuote.trim();
+        if (partial.length > 0 && partial !== arrayKey) {
+          // 途中で切れた文字列も結果に含める
+          results.push(partial + '（※AIの出力が途切れました）');
+        }
       }
     }
 
@@ -97,6 +98,7 @@ export const checkEtymologyMatch = async (
       explanation: matched
         ? `（モック）「${word}」は語源リストの要素を含んでいます。`
         : undefined,
+      integratedMeaning: matched ? "（モック）外へ＋運ぶ → 輸出する" : undefined,
       parts: matched ? [
         { part: "ex", meaning: "外へ", relatedWords: [{ word: "exit", meaning: "出口" }, { word: "export", meaning: "輸出する" }] },
         { part: "port", meaning: "運ぶ", relatedWords: [{ word: "portable", meaning: "持ち運び可能な" }, { word: "import", meaning: "輸入する" }] }
@@ -141,6 +143,10 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
 ※ユーザーの語源リストに含まれていないパーツであっても、単語を構成するすべてのパーツを漏れなく抽出して \`parts\` 配列に含めてください。（例：expire の場合、ex だけでなく spir/pire などすべての構成要素を抽出する）
 そして、抽出したすべてのパーツそれぞれについて、意味と、同じ語源を持つ別の「非常に簡単な（できればCEFR A1〜A2レベル、中学・高校初級レベルの）」英単語（対象単語以外）を【必ず3つずつ】提示してください。
 
+さらに、分解したそれぞれのパーツの意味を統合して、どのように現在の単語の意味につながっているのかを表す短い統合フレーズを \`integratedMeaning\` として出力してください。
+その際、意味の変遷の各段階を必ず「→」記号でつないでください。
+例：「魂が外に出ていく→期限が切れる」「外へ＋運ぶ→輸出する」
+
 重要：
 出力における「解説(explanation)」や「意味(meaning)」、「関連語の意味(relatedWordMeaning)」などの説明文は、すべて必ず日本語のみで記述してください。英語の文章やフレーズを含めないでください。
 また、JSONフォーマットエラーを防ぐため、以下の点に必ず従ってください。
@@ -169,6 +175,7 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
               matched: { type: "BOOLEAN" },
               explanation: { type: "STRING" },
               targetWordMeaning: { type: "STRING" },
+              integratedMeaning: { type: "STRING" },
               parts: {
                 type: "ARRAY",
                 items: {
@@ -192,7 +199,7 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
                 }
               }
             },
-            required: ["isRealWord", "matched", "explanation", "targetWordMeaning", "parts"]
+            required: ["isRealWord", "matched", "explanation", "targetWordMeaning", "integratedMeaning", "parts"]
           }
         },
         safetySettings: [
@@ -264,6 +271,163 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
     console.error('[EtymologyCheck] 判定中にエラーが発生しました:', err);
     // エラー時は「語源で覚えられない」側に倒す（画面Bへ）
     return { matched: false };
+  }
+};
+
+export const generateFakeEtymology = async (targetWord: string, meaning: string, similarWord: string): Promise<string> => {
+  if (!GEMINI_API_KEY) {
+    return `「${targetWord}」と「${similarWord}」は同じ語源から派生した言葉です。`;
+  }
+
+  const prompt = `
+あなたはエセ語源学者として、英単語「${targetWord}」（意味：${meaning}）と、入力された英単語「${similarWord}」が、実は共通の語源を持つという「架空の（嘘の）語源解説」を作成してください。
+
+【ルール】
+- 「${targetWord}」と「${similarWord}」の両方が、「〇〇（意味：〜）」という一つの共通の語源から生まれた、という構成にしてください。
+- 2つの言葉の「見た目」や「動き」、「共通のイメージ」に焦点を当てて、納得感のある解説をでっち上げてください。
+- 専門用語（印欧語根、派生など）は使わず、誰でもスッと理解できる簡単な言葉で説明してください。
+- 2〜3文程度の短い文章（100文字〜150文字程度）で簡潔にまとめ、必ず「〜からです。」「〜と言われています。」のように文末を完全に終わらせてください。途中で絶対に切らないでください。
+- 挨拶、前置きは不要です。
+- 【重要】「このように、〜という繋がりがあるのです」「〜というわけです」といった、全体を総括するような締めの一文は絶対に書かないでください。由来を語り終えたところでスッと文章を終わらせてください。
+- 【重要】出力する解説文の中では、「架空の」「嘘の」「〜という設定」「でっち上げた」といったメタな発言やネタばらしを絶対にしないでください。本当の歴史的事実であるかのように、自信満々に語り切ってください。
+- 【重要】～からです。というような理由を表す表現を使用しないでください。
+- 【重要】下記の定型文を厳守してください。 定型文：${targetWord}と${similarWord}は「（${targetWord}と${similarWord}に共通するアルファベットをもとに考えた架空のラテン語を小文字で）」（意味：△△）という共通の語源を持ちます。どちらも---。${targetWord}は---で、${similarWord}は---です。
+`.trim();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.9,
+          maxOutputTokens: 4096,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!rawText) throw new Error('Empty response');
+
+    return rawText.trim();
+  } catch (err: any) {
+    console.error('[GenerateFakeEtymology] Error:', err);
+    throw err;
+  }
+};
+
+export const generateFakeRelationship = async (targetWord: string, meaning: string, katakanaWord: string): Promise<string> => {
+  if (!GEMINI_API_KEY) {
+    return `（モック）実は「${targetWord}」と「${katakanaWord}」には共通点があります。`;
+  }
+
+  const prompt = `
+あなたは雑学王として、英単語「${targetWord}」（意味：${meaning}）と入力されたカタカナ語「${katakanaWord}」をあたかも関係があるかのようにトリビアをでっちあげてください。
+
+【ルール】
+- 【最重要】カタカナ語「${katakanaWord}」の語源や由来を説明してはいけません。あくまで主役は暗記対象の英単語「${targetWord}」です。
+- 2つの言葉の「共通のイメージ」に焦点を当てて、納得感のあるストーリーにしてください。
+- 誰でもスッと理解できる簡単な言葉で説明してください。
+- 2〜3文程度の短い文章（100文字〜120文字程度）で簡潔にまとめ、必ず「〜からです。」と文末を完全に終わらせてください。途中で絶対に切らないでください。
+- 挨拶、前置きは不要です。
+- 【重要】「このように、〜という深い関係があるのです」「〜というわけです」といった、全体を総括するような教訓めいた締めの一文は絶対に書かないでください。具体的なエピソードや理由を語り終えたところで、スッと文章を終わらせてください。
+- 【重要】出力する解説文の中では、「架空の」「嘘の」「〜という設定」「でっち上げた」といったメタな発言やネタばらしを絶対にしないでください。本当の歴史的事実であるかのように、自信満々に語り切ってください。
+- 【重要】下記の定型文を厳守してください。 定型文：${katakanaWord}は${targetWord}に由来します。${targetWord}は---で、${katakanaWord}です。
+`.trim();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.9,
+          maxOutputTokens: 4096,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!rawText) throw new Error('Empty response');
+
+    return rawText.trim();
+  } catch (err: any) {
+    console.error('[GenerateFakeRelationship] Error:', err);
+    throw err;
+  }
+};
+
+export const generateMnemonicStory = async (targetWord: string, meaning: string, mnemonic: string): Promise<string> => {
+  if (!GEMINI_API_KEY) {
+    return `（モック）この語呂合わせから、ありありと情景が目に浮かびますね。`;
+  }
+
+  const prompt = `
+あなたはプロの作家です。英単語「${targetWord}」（意味：${meaning}）を暗記するために作成された語呂合わせ「${mnemonic}」から、より強く記憶に残るような「短い情景描写（ショートストーリー）」を作成してください。
+
+【ルール】
+- 語呂合わせの内容を映像として想像しやすいよう、具体的な情景を描写してください。
+- 2〜3文程度の短い文章（100文字〜150文字程度）で簡潔に描き、文末を完全に終わらせてください。
+- 途中で絶対に切らないでください。
+- 挨拶、前置きは不要です。
+- 【重要】「〜というわけです」「〜というお話でした」といった、全体を総括するような解説や締めの一文は絶対に書かないでください。情景を描写し終えたところでスッと文章を終わらせてください。
+`.trim();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.9,
+          maxOutputTokens: 4096,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!rawText) throw new Error('Empty response');
+
+    return rawText.trim();
+  } catch (err: any) {
+    console.error('[GenerateMnemonicStory] Error:', err);
+    throw err;
   }
 };
 
@@ -440,17 +604,21 @@ export const suggestMnemonic = async (word: string, meaning: string): Promise<st
   const prompt = `
 英単語「${word}」（意味：「${meaning}」）を暗記するための、質の高い「語呂合わせ」を3つ提案してください。
 
-【ルール】
-1. 対象単語の「発音（カタカナでの響き）」と「意味」を無理なく結びつけた、覚えやすくて面白い語呂合わせを作成してください。
-2. 語呂合わせの文と、その簡単な解説を含めてください。
-3. 出力は「語呂合わせの文（簡単な解説）」の形式のみとしてください。
+【優れた語呂合わせの条件】
+- 英単語の「実際の発音（またはスペルから連想されるカタカナ読み）」の一部または全部を、日本語の単語やフレーズに置き換えていること。
+- その置き換えた日本語と、英単語の「意味」が、1つの自然で情景が思い浮かぶ文にまとまっていること。
 
-出力例：
+【ルール】
+1. 上記の条件を満たす、覚えやすくて面白い語呂合わせを作成してください。
+2. 語呂合わせの文の後に、括弧書きで「どの音が、どの意味と結びついているか」の簡単な解説を含めてください。
+3. 出力形式は「語呂合わせの文（解説）」のみとしてください。
+
+出力例（英単語「abandon」意味「見捨てる」の場合）：
 {
   "mnemonics": [
-    "アッポー（Apple）が落ちてきてリンゴ（意味）に当たる（リンゴが落ちてくる様子をイメージ）",
-    "犬（Dog）がドッグ（Dog）フードを食べる（そのまんまのイメージ）",
-    "キャット（Cat）がキャッと（Cat）驚く猫（意味）（猫が驚く様子をイメージ）"
+    "アバン（aban）ドン（don）と突き放して見捨てる（aban+don＝見捨てる）",
+    "「あ、晩（aban）だ、ドン（don）マイ！」と友人をあっさり見捨てる（あ、晩＋ドン＝見捨てる）",
+    "アーバン（aban）な街でドン（don）底の親友を見捨てる（アーバン＋ドン＝見捨てる）"
   ]
 }
 

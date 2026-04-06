@@ -35,7 +35,16 @@ export const WordList: React.FC = () => {
       const result = await getFlashcard(email, decodeURIComponent(title));
       if (result.success) {
         // バックエンドが返す形式（flashcardsキーの配列）に対応
-        setWords(result.flashcards || result.words || []);
+        const rawWords = result.flashcards || result.words || [];
+        const mappedWords = rawWords.map((item: any) => {
+          if (Array.isArray(item) && item.length >= 3) {
+            // もしGASがシートの行データ(A列=item[0], B列=item[1], C列=item[2]...)を返している場合、
+            // B列(英単語)とC列(意味)をフェッチして表示する
+            return { word: item[1] || '', meaning: item[2] || '' };
+          }
+          return item; // 既に {word, meaning} のオブジェクト形式の場合はそのまま
+        });
+        setWords(mappedWords);
       } else {
         setError(result.error || '単語の取得に失敗しました。');
       }
