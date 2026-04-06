@@ -46,13 +46,13 @@ export const WordRegistration: React.FC = () => {
         return;
       }
 
-      // 語源マッチの有無に関わらず、意味はセットする
+      // 語源マッチの有無に関わらず、意味と語源情報はセットする
       setTargetWordMeaning(matchResult.targetWordMeaning ?? '');
+      setEtymologyInfo(matchResult.explanation ?? '');
+      setEtymologyParts(matchResult.parts ?? []);
+      setIntegratedMeaning(matchResult.integratedMeaning ?? '');
 
       if (matchResult.matched) {
-        setEtymologyInfo(matchResult.explanation ?? '');
-        setEtymologyParts(matchResult.parts ?? []);
-        setIntegratedMeaning(matchResult.integratedMeaning ?? '');
         setStep('screenA');
       } else {
         setStep('screenB');
