@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight, ArrowDown, Plus, RefreshCcw } from 'lucide-react';
 import { getKnownEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, suggestSimilarWords, suggestOtherAssociations, type EtymologyPart } from '../api/wordRegistration';
+import { checkEtymologyMatch, suggestSimilarWords, suggestOtherAssociations, suggestMnemonic, type EtymologyPart } from '../api/wordRegistration';
 
-type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD';
+type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
 export const WordRegistration: React.FC = () => {
   const navigate = useNavigate();
@@ -122,9 +122,6 @@ export const WordRegistration: React.FC = () => {
         </div>
       </div>
 
-      {/* ───── ステップインジケーター ───── */}
-      <StepIndicator step={step} />
-
       {/* ───── コンテンツ ───── */}
       <div style={{ flex: 1, marginTop: '28px' }}>
         {step === 'input' && (
@@ -157,6 +154,7 @@ export const WordRegistration: React.FC = () => {
             setFreeText={setFreeText}
             onSimilarWord={() => setStep('screenC')}
             onOther={() => setStep('screenD')}
+            onMnemonic={() => setStep('screenE')}
             onBack={backToInput}
           />
         )}
@@ -166,74 +164,10 @@ export const WordRegistration: React.FC = () => {
         {step === 'screenD' && (
           <ScreenD word={word} freeText={freeText} onBack={() => setStep('screenB')} flashcardTitle={title ?? ''} />
         )}
+        {step === 'screenE' && (
+          <ScreenE word={word} freeText={freeText} onBack={() => setStep('screenB')} flashcardTitle={title ?? ''} />
+        )}
       </div>
-    </div>
-  );
-};
-
-// ══════════════════════════════════════════════════════════════
-// Step Indicator
-// ══════════════════════════════════════════════════════════════
-const stepLabels: { id: Step; label: string }[] = [
-  { id: 'input', label: '入力' },
-  { id: 'screenA', label: '語源' },
-  { id: 'screenB', label: '連想' },
-  { id: 'screenC', label: '類語' },
-  { id: 'screenD', label: 'メモ' },
-];
-
-const StepIndicator: React.FC<{ step: Step }> = ({ step }) => {
-  const active = step === 'judging' ? 'input' : step;
-  const activeIdx = stepLabels.findIndex(s => s.id === active);
-
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
-      {stepLabels.map((s, i) => {
-        const isDone = i < activeIdx;
-        const isCurrent = s.id === active;
-        return (
-          <React.Fragment key={s.id}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-              <div
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '50%',
-                  background: isCurrent
-                    ? 'var(--accent-color)'
-                    : isDone
-                    ? 'rgba(59,130,246,0.4)'
-                    : 'rgba(255,255,255,0.08)',
-                  border: isCurrent ? '2px solid #60a5fa' : '2px solid transparent',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  transition: 'all 0.3s ease',
-                  color: isCurrent || isDone ? '#fff' : 'var(--text-secondary)',
-                }}
-              >
-                {isDone ? <CheckCircle size={14} /> : i + 1}
-              </div>
-              <span style={{ fontSize: '0.7rem', color: isCurrent ? 'var(--text-primary)' : 'var(--text-secondary)' }}>
-                {s.label}
-              </span>
-            </div>
-            {i < stepLabels.length - 1 && (
-              <div
-                style={{
-                  flex: 1,
-                  height: '2px',
-                  background: isDone ? 'rgba(59,130,246,0.5)' : 'rgba(255,255,255,0.08)',
-                  marginBottom: '18px',
-                  transition: 'background 0.3s ease',
-                }}
-              />
-            )}
-          </React.Fragment>
-        );
-      })}
     </div>
   );
 };
@@ -356,191 +290,191 @@ const ScreenA: React.FC<{
   };
 
   return (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-    <div
-      style={{
-        padding: '6px 14px',
-        background: 'rgba(16,185,129,0.15)',
-        border: '1px solid rgba(16,185,129,0.4)',
-        borderRadius: '999px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        width: 'fit-content',
-        color: '#10b981',
-        fontSize: '0.85rem',
-        fontWeight: 600,
-        margin: '0 auto',
-      }}
-    >
-      ✅ 語源で覚えやすい単語です
-    </div>
-
-    {/* 対象単語 */}
-    <div style={{ textAlign: 'center', margin: '16px 0' }}>
-      <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
-        {word}
-      </h3>
-      {targetWordMeaning && (
-        <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          {targetWordMeaning}
-        </p>
-      )}
-    </div>
-
-    {/* 語源の分解と意味 */}
-    {etymologyParts && etymologyParts.length > 0 && (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
-        <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
-          語源で分解
-        </h4>
-        
-        <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
-          {etymologyParts.map((part, idx) => (
-            <React.Fragment key={idx}>
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center',
-                gap: '8px',
-                width: '200px'
-              }}>
-                {/* パーツ */}
-                <div style={{ 
-                  background: 'rgba(16,185,129,0.15)', 
-                  color: '#10b981', 
-                  padding: '8px 16px', 
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '1.4rem',
-                  textAlign: 'center',
-                  width: '100%'
-                }}>
-                  {part.part}
-                </div>
-                
-                {/* 下向き矢印 */}
-                <div style={{ color: 'var(--text-secondary)' }}>
-                  <ArrowDown size={20} />
-                </div>
-                
-                {/* 意味 */}
-                <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
-                  {part.meaning}
-                </div>
-
-                {/* 関連語 */}
-                <div style={{ 
-                  marginTop: '8px',
-                  padding: '12px',
-                  background: 'rgba(15, 23, 42, 0.4)',
-                  borderRadius: '12px',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '8px',
-                  width: '100%'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>同じ語源の単語</p>
-                    {part.relatedWords && part.relatedWords.length > 1 && (
-                      <button
-                        onClick={() => handleRefreshRelatedWord(idx, part.relatedWords.length)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '2px',
-                          padding: '2px 4px',
-                          borderRadius: '4px',
-                        }}
-                      >
-                        <RefreshCcw size={12} />
-                      </button>
-                    )}
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                    <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#60a5fa' }}>
-                      {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.word}
-                    </span>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                      {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.meaning}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              {idx < etymologyParts.length - 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
-                  <Plus size={24} color="var(--text-secondary)" />
-                </div>
-              )}
-            </React.Fragment>
-          ))}
-        </div>
-      </div>
-    )}
-
-    {(!etymologyParts || etymologyParts.length === 0) && etymologyInfo && (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div
         style={{
-          padding: '28px',
-          background: 'rgba(16,185,129,0.06)',
-          border: '1px solid rgba(16,185,129,0.2)',
-          borderRadius: '16px',
+          padding: '6px 14px',
+          background: 'rgba(16,185,129,0.15)',
+          border: '1px solid rgba(16,185,129,0.4)',
+          borderRadius: '999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          width: 'fit-content',
+          color: '#10b981',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          margin: '0 auto',
         }}
       >
-        <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
-        <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{etymologyInfo}</p>
+        ✅ 語源で覚えやすい単語です
       </div>
-    )}
 
-    {/* 仮ページである旨 */}
-    <div
-      style={{
-        padding: '16px 20px',
-        background: 'rgba(234,179,8,0.1)',
-        border: '1px dashed rgba(234,179,8,0.4)',
-        borderRadius: '12px',
-        color: '#eab308',
-        fontSize: '0.85rem',
-        display: 'none', // Hide the "under construction" dev note as we are implementing it
-        alignItems: 'center',
-        gap: '8px',
-      }}
-    >
-      🚧 このページは現在開発中です（画面A：語源暗記）
-    </div>
+      {/* 対象単語 */}
+      <div style={{ textAlign: 'center', margin: '16px 0' }}>
+        <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
+          {word}
+        </h3>
+        {targetWordMeaning && (
+          <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {targetWordMeaning}
+          </p>
+        )}
+      </div>
 
-    <div style={{ display: 'flex', gap: '12px' }}>
-      <button
-        onClick={onBack}
+      {/* 語源の分解と意味 */}
+      {etymologyParts && etymologyParts.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
+          <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
+            語源で分解
+          </h4>
+
+          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+            {etymologyParts.map((part, idx) => (
+              <React.Fragment key={idx}>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                  width: '200px'
+                }}>
+                  {/* パーツ */}
+                  <div style={{
+                    background: 'rgba(16,185,129,0.15)',
+                    color: '#10b981',
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '1.4rem',
+                    textAlign: 'center',
+                    width: '100%'
+                  }}>
+                    {part.part}
+                  </div>
+
+                  {/* 下向き矢印 */}
+                  <div style={{ color: 'var(--text-secondary)' }}>
+                    <ArrowDown size={20} />
+                  </div>
+
+                  {/* 意味 */}
+                  <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
+                    {part.meaning}
+                  </div>
+
+                  {/* 関連語 */}
+                  <div style={{
+                    marginTop: '8px',
+                    padding: '12px',
+                    background: 'rgba(15, 23, 42, 0.4)',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                    width: '100%'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>同じ語源の単語</p>
+                      {part.relatedWords && part.relatedWords.length > 1 && (
+                        <button
+                          onClick={() => handleRefreshRelatedWord(idx, part.relatedWords.length)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            padding: '2px 4px',
+                            borderRadius: '4px',
+                          }}
+                        >
+                          <RefreshCcw size={12} />
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                      <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#60a5fa' }}>
+                        {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.word}
+                      </span>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                        {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.meaning}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                {idx < etymologyParts.length - 1 && (
+                  <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
+                    <Plus size={24} color="var(--text-secondary)" />
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(!etymologyParts || etymologyParts.length === 0) && etymologyInfo && (
+        <div
+          style={{
+            padding: '28px',
+            background: 'rgba(16,185,129,0.06)',
+            border: '1px solid rgba(16,185,129,0.2)',
+            borderRadius: '16px',
+          }}
+        >
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
+          <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{etymologyInfo}</p>
+        </div>
+      )}
+
+      {/* 仮ページである旨 */}
+      <div
         style={{
-          flex: 1,
-          padding: '12px',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid var(--panel-border)',
-          borderRadius: '10px',
-          cursor: 'pointer',
-          color: 'var(--text-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          padding: '16px 20px',
+          background: 'rgba(234,179,8,0.1)',
+          border: '1px dashed rgba(234,179,8,0.4)',
+          borderRadius: '12px',
+          color: '#eab308',
+          fontSize: '0.85rem',
+          display: 'none', // Hide the "under construction" dev note as we are implementing it
+          alignItems: 'center',
+          gap: '8px',
         }}
       >
-        <ArrowLeft size={16} /> 別の単語を入力
-      </button>
-      <button
-        id="screen-a-save-btn"
-        className="btn-primary"
-        style={{ flex: 1 }}
-        onClick={handleSaveClick}
-        disabled={isSaving}
-      >
-        <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
-      </button>
+        🚧 このページは現在開発中です（画面A：語源暗記）
+      </div>
+
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            flex: 1,
+            padding: '12px',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--panel-border)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            color: 'var(--text-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          }}
+        >
+          <ArrowLeft size={16} /> 別の単語を入力
+        </button>
+        <button
+          id="screen-a-save-btn"
+          className="btn-primary"
+          style={{ flex: 1 }}
+          onClick={handleSaveClick}
+          disabled={isSaving}
+        >
+          <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
+        </button>
+      </div>
     </div>
-  </div>
   );
 };
 
@@ -554,10 +488,11 @@ const ScreenB: React.FC<{
   setFreeText: (v: string) => void;
   onSimilarWord: () => void;
   onOther: () => void;
+  onMnemonic: () => void;
   onBack: () => void;
-}> = ({ word, targetWordMeaning, freeText, setFreeText, onSimilarWord, onOther, onBack }) => {
-  const [selection, setSelection] = useState<'similar' | 'other' | null>(null);
-  
+}> = ({ word, targetWordMeaning, freeText, setFreeText, onSimilarWord, onOther, onMnemonic, onBack }) => {
+  const [selection, setSelection] = useState<'similar' | 'other' | 'mnemonic' | null>(null);
+
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionIndex, setSuggestionIndex] = useState(0);
   const [isSuggesting, setIsSuggesting] = useState(false);
@@ -565,6 +500,10 @@ const ScreenB: React.FC<{
   const [otherSuggestions, setOtherSuggestions] = useState<string[]>([]);
   const [otherSuggestionIndex, setOtherSuggestionIndex] = useState(0);
   const [isSuggestingOther, setIsSuggestingOther] = useState(false);
+
+  const [mnemonicSuggestions, setMnemonicSuggestions] = useState<string[]>([]);
+  const [mnemonicSuggestionIndex, setMnemonicSuggestionIndex] = useState(0);
+  const [isSuggestingMnemonic, setIsSuggestingMnemonic] = useState(false);
 
   const handleSuggest = async (forceFetch: boolean = false) => {
     // もしすでに提案があり、かつ強制再フェッチでなければ次へサイクルする
@@ -574,7 +513,7 @@ const ScreenB: React.FC<{
       setFreeText(suggestions[nextIndex]);
       return;
     }
-    
+
     setIsSuggesting(true);
     try {
       const res = await suggestSimilarWords(word);
@@ -600,7 +539,7 @@ const ScreenB: React.FC<{
       setFreeText(otherSuggestions[nextIndex]);
       return;
     }
-    
+
     setIsSuggestingOther(true);
     try {
       const res = await suggestOtherAssociations(word);
@@ -619,119 +558,134 @@ const ScreenB: React.FC<{
     }
   };
 
+  const handleSuggestMnemonic = async (forceFetch: boolean = false) => {
+    if (!forceFetch && mnemonicSuggestions.length > 0) {
+      const nextIndex = (mnemonicSuggestionIndex + 1) % mnemonicSuggestions.length;
+      setMnemonicSuggestionIndex(nextIndex);
+      setFreeText(mnemonicSuggestions[nextIndex]);
+      return;
+    }
+
+    setIsSuggestingMnemonic(true);
+    try {
+      const res = await suggestMnemonic(word, targetWordMeaning);
+      if (res && res.length > 0) {
+        setMnemonicSuggestions(res);
+        setMnemonicSuggestionIndex(0);
+        setFreeText(res[0]);
+      } else {
+        alert('語呂合わせの提案を取得できませんでした。');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`エラーが発生しました: ${err.message || err}`);
+    } finally {
+      setIsSuggestingMnemonic(false);
+    }
+  };
+
   const handleNext = () => {
     if (selection === 'similar') onSimilarWord();
     else if (selection === 'other') onOther();
+    else if (selection === 'mnemonic') onMnemonic();
   };
 
   return (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-    <div
-      style={{
-        padding: '6px 14px',
-        background: 'rgba(99,102,241,0.15)',
-        border: '1px solid rgba(99,102,241,0.4)',
-        borderRadius: '999px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        width: 'fit-content',
-        color: '#818cf8',
-        fontSize: '0.85rem',
-        fontWeight: 600,
-      }}
-    >
-      <Lightbulb size={14} /> 自由連想モード
-    </div>
-
-    {/* 単語表示 */}
-    <div
-      style={{
-        padding: '24px',
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid var(--panel-border)',
-        borderRadius: '16px',
-        textAlign: 'center',
-      }}
-    >
-      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>この単語を見て思ったことを書いてください</p>
-      <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>{word}</h3>
-      {targetWordMeaning && (
-        <p style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-          {targetWordMeaning}
-        </p>
-      )}
-    </div>
-
-    {/* 分岐ボタン */}
-    <div>
-      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '14px', textAlign: 'center' }}>
-        まず、どちらのアプローチで暗記するか選択してください
-      </p>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-        <ChoiceCard
-          id="btn-similar-word"
-          icon="🔤"
-          title="似た英単語"
-          desc="別の英単語を思い浮かべた"
-          color="#6366f1"
-          onClick={() => {
-            setSelection('similar');
-            if (suggestions.length > 0) setFreeText(suggestions[suggestionIndex]);
-          }}
-          selected={selection === 'similar'}
-        />
-        <ChoiceCard
-          id="btn-other"
-          icon="💭"
-          title="それ以外"
-          desc="日本語・イメージ・語呂合わせなど"
-          color="#0ea5e9"
-          onClick={() => {
-            setSelection('other');
-            if (otherSuggestions.length > 0) setFreeText(otherSuggestions[otherSuggestionIndex]);
-          }}
-          selected={selection === 'other'}
-        />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <div
+        style={{
+          padding: '6px 14px',
+          background: 'rgba(99,102,241,0.15)',
+          border: '1px solid rgba(99,102,241,0.4)',
+          borderRadius: '999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          width: 'fit-content',
+          color: '#818cf8',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+        }}
+      >
+        <Lightbulb size={14} /> 自由連想モード
       </div>
-    </div>
 
-    {/* 自由入力 */}
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <label className="label-text" htmlFor="free-text-input" style={{ margin: 0 }}>思ったこと・連想したこと</label>
-        {selection === 'similar' && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => handleSuggest(false)}
-              disabled={isSuggesting}
-              style={{
-                background: 'rgba(99,102,241,0.2)',
-                border: '1px solid rgba(99,102,241,0.4)',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                color: '#818cf8',
-                fontSize: '0.8rem',
-                cursor: isSuggesting ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'background 0.2s',
-              }}
-            >
-              <Sparkles size={14} />
-              {isSuggesting ? '提案中...' : suggestions.length > 0 ? '次の提案を見る' : '似た単語を提案'}
-            </button>
-            {suggestions.length > 0 && (
+      {/* 単語表示 */}
+      <div
+        style={{
+          padding: '24px',
+          background: 'rgba(255,255,255,0.03)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '16px',
+          textAlign: 'center',
+        }}
+      >
+        <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>{word}</h3>
+        {targetWordMeaning && (
+          <p style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {targetWordMeaning}
+          </p>
+        )}
+      </div>
+
+      {/* 分岐ボタン */}
+      <div>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '14px', textAlign: 'center' }}>
+          まず、どちらのアプローチで暗記するか選択してください
+        </p>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
+          <ChoiceCard
+            id="btn-similar-word"
+            icon="🔤"
+            title="似た英単語"
+            desc="似た英単語を思い浮かべた"
+            color="#6366f1"
+            onClick={() => {
+              setSelection('similar');
+              if (suggestions.length > 0) setFreeText(suggestions[suggestionIndex]);
+            }}
+            selected={selection === 'similar'}
+          />
+          <ChoiceCard
+            id="btn-other"
+            icon="💭"
+            title="似たカタカナ語"
+            desc="カタカナ語を思い浮かべた"
+            color="#0ea5e9"
+            onClick={() => {
+              setSelection('other');
+              if (otherSuggestions.length > 0) setFreeText(otherSuggestions[otherSuggestionIndex]);
+            }}
+            selected={selection === 'other'}
+          />
+          <ChoiceCard
+            id="btn-mnemonic"
+            icon="🤣"
+            title="語呂合わせ"
+            desc="語呂合わせで覚える"
+            color="#f59e0b"
+            onClick={() => {
+              setSelection('mnemonic');
+              if (mnemonicSuggestions.length > 0) setFreeText(mnemonicSuggestions[mnemonicSuggestionIndex]);
+            }}
+            selected={selection === 'mnemonic'}
+          />
+        </div>
+      </div>
+
+      {/* 自由入力 */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+          {selection === 'similar' && (
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => handleSuggest(true)}
+                onClick={() => handleSuggest(false)}
                 disabled={isSuggesting}
-                title="新しい提案をAIに考えさせる"
                 style={{
-                  background: 'transparent',
+                  background: 'rgba(99,102,241,0.2)',
                   border: '1px solid rgba(99,102,241,0.4)',
                   borderRadius: '8px',
-                  padding: '6px 10px',
+                  padding: '6px 12px',
                   color: '#818cf8',
                   fontSize: '0.8rem',
                   cursor: isSuggesting ? 'not-allowed' : 'pointer',
@@ -741,41 +695,41 @@ const ScreenB: React.FC<{
                   transition: 'background 0.2s',
                 }}
               >
-                <RefreshCcw size={14} />
-                再生成
+                <Sparkles size={14} />
+                {isSuggesting ? '提案中...' : suggestions.length > 0 ? '次の提案を見る' : '似た単語を提案'}
               </button>
-            )}
-          </div>
-        )}
-        {selection === 'other' && (
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => handleSuggestOther(false)}
-              disabled={isSuggestingOther}
-              style={{
-                background: 'rgba(14,165,233,0.2)',
-                border: '1px solid rgba(14,165,233,0.4)',
-                borderRadius: '8px',
-                padding: '6px 12px',
-                color: '#38bdf8',
-                fontSize: '0.8rem',
-                cursor: isSuggestingOther ? 'not-allowed' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '4px',
-                transition: 'background 0.2s',
-              }}
-            >
-              <Sparkles size={14} />
-              {isSuggestingOther ? '提案中...' : otherSuggestions.length > 0 ? '別の連想を見る' : '連想を提案'}
-            </button>
-            {otherSuggestions.length > 0 && (
+              {suggestions.length > 0 && (
+                <button
+                  onClick={() => handleSuggest(true)}
+                  disabled={isSuggesting}
+                  title="新しい提案をAIに考えさせる"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(99,102,241,0.4)',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    color: '#818cf8',
+                    fontSize: '0.8rem',
+                    cursor: isSuggesting ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  <RefreshCcw size={14} />
+                  再生成
+                </button>
+              )}
+            </div>
+          )}
+          {selection === 'other' && (
+            <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => handleSuggestOther(true)}
+                onClick={() => handleSuggestOther(false)}
                 disabled={isSuggestingOther}
-                title="新しい連想をAIに考えさせる"
                 style={{
-                  background: 'transparent',
+                  background: 'rgba(14,165,233,0.2)',
                   border: '1px solid rgba(14,165,233,0.4)',
                   borderRadius: '8px',
                   padding: '6px 12px',
@@ -788,60 +742,132 @@ const ScreenB: React.FC<{
                   transition: 'background 0.2s',
                 }}
               >
-                <RefreshCcw size={14} />
-                再生成
+                <Sparkles size={14} />
+                {isSuggestingOther ? '提案中...' : otherSuggestions.length > 0 ? '別の連想を見る' : '連想を提案'}
               </button>
-            )}
-          </div>
-        )}
+              {otherSuggestions.length > 0 && (
+                <button
+                  onClick={() => handleSuggestOther(true)}
+                  disabled={isSuggestingOther}
+                  title="新しい連想をAIに考えさせる"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(14,165,233,0.4)',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    color: '#38bdf8',
+                    fontSize: '0.8rem',
+                    cursor: isSuggestingOther ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  <RefreshCcw size={14} />
+                  再生成
+                </button>
+              )}
+            </div>
+          )}
+          {selection === 'mnemonic' && (
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => handleSuggestMnemonic(false)}
+                disabled={isSuggestingMnemonic}
+                style={{
+                  background: 'rgba(245,158,11,0.2)',
+                  border: '1px solid rgba(245,158,11,0.4)',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  color: '#fbbf24',
+                  fontSize: '0.8rem',
+                  cursor: isSuggestingMnemonic ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'background 0.2s',
+                }}
+              >
+                <Sparkles size={14} />
+                {isSuggestingMnemonic ? '提案中...' : mnemonicSuggestions.length > 0 ? '別の語呂合わせを見る' : '語呂合わせを提案'}
+              </button>
+              {mnemonicSuggestions.length > 0 && (
+                <button
+                  onClick={() => handleSuggestMnemonic(true)}
+                  disabled={isSuggestingMnemonic}
+                  title="新しい語呂合わせをAIに考えさせる"
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid rgba(245,158,11,0.4)',
+                    borderRadius: '8px',
+                    padding: '6px 12px',
+                    color: '#fbbf24',
+                    fontSize: '0.8rem',
+                    cursor: isSuggestingMnemonic ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'background 0.2s',
+                  }}
+                >
+                  <RefreshCcw size={14} />
+                  再生成
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <textarea
+          id="free-text-input"
+          className="custom-input"
+          value={freeText}
+          onChange={e => {
+            setFreeText(e.target.value);
+            // ユーザーが手動編集したら提案のサイクルをリセット
+            if (selection === 'similar' && suggestions.length > 0 && e.target.value !== suggestions[suggestionIndex]) {
+              setSuggestions([]);
+            }
+            if (selection === 'other' && otherSuggestions.length > 0 && e.target.value !== otherSuggestions[otherSuggestionIndex]) {
+              setOtherSuggestions([]);
+            }
+            if (selection === 'mnemonic' && mnemonicSuggestions.length > 0 && e.target.value !== mnemonicSuggestions[mnemonicSuggestionIndex]) {
+              setMnemonicSuggestions([]);
+            }
+          }}
+          placeholder="似た単語、イメージ、語呂合わせ、エピソードなど何でもOK..."
+          rows={4}
+          style={{ resize: 'vertical', lineHeight: 1.7 }}
+        />
       </div>
-      <textarea
-        id="free-text-input"
-        className="custom-input"
-        value={freeText}
-        onChange={e => {
-          setFreeText(e.target.value);
-          // ユーザーが手動編集したら提案のサイクルをリセット
-          if (selection === 'similar' && suggestions.length > 0 && e.target.value !== suggestions[suggestionIndex]) {
-            setSuggestions([]);
-          }
-          if (selection === 'other' && otherSuggestions.length > 0 && e.target.value !== otherSuggestions[otherSuggestionIndex]) {
-            setOtherSuggestions([]);
-          }
-        }}
-        placeholder="似た単語、イメージ、語呂合わせ、エピソードなど何でもOK..."
-        rows={4}
-        style={{ resize: 'vertical', lineHeight: 1.7 }}
-      />
-    </div>
 
-    {/* ボタン群 */}
-    <div style={{ display: 'flex', gap: '12px' }}>
-      <button
-        onClick={onBack}
-        style={{
-          flex: 1,
-          padding: '12px',
-          background: 'rgba(255,255,255,0.05)',
-          border: '1px solid var(--panel-border)',
-          borderRadius: '10px',
-          cursor: 'pointer',
-          color: 'var(--text-primary)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-        }}
-      >
-        <ArrowLeft size={16} /> 戻る
-      </button>
-      <button
-        className="btn-primary"
-        style={{ flex: 1 }}
-        onClick={handleNext}
-        disabled={!selection || !freeText.trim()}
-      >
-        次へ <ArrowRight size={16} />
-      </button>
+      {/* ボタン群 */}
+      <div style={{ display: 'flex', gap: '12px' }}>
+        <button
+          onClick={onBack}
+          style={{
+            flex: 1,
+            padding: '12px',
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--panel-border)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            color: 'var(--text-primary)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          }}
+        >
+          <ArrowLeft size={16} /> 戻る
+        </button>
+        <button
+          className="btn-primary"
+          style={{ flex: 1 }}
+          onClick={handleNext}
+          disabled={!selection || !freeText.trim()}
+        >
+          次へ <ArrowRight size={16} />
+        </button>
+      </div>
     </div>
-  </div>
   );
 };
 
@@ -938,6 +964,30 @@ const ScreenD: React.FC<{ word: string; freeText: string; onBack: () => void; fl
     onBack={onBack}
     onSave={() => alert('（仮）カードが保存されました！')}
     saveId="screen-d-save-btn"
+    backLabel="連想入力に戻る"
+  />
+);
+
+// ══════════════════════════════════════════════════════════════
+// 画面 E（仮）: 語呂合わせで暗記
+// ══════════════════════════════════════════════════════════════
+const ScreenE: React.FC<{ word: string; freeText: string; onBack: () => void; flashcardTitle: string }> = ({
+  word,
+  freeText,
+  onBack,
+  flashcardTitle: _flashcardTitleE,
+}) => (
+  <PlaceholderScreen
+    badge="🤣 画面E：語呂合わせで暗記"
+    badgeColor="#f59e0b"
+    label="入力した語呂合わせ"
+    word={word}
+    freeText={freeText}
+    description={`「${freeText}」という語呂合わせで「${word}」を覚えます。`}
+    devNote="このページは現在開発中です（画面E：語呂合わせ暗記）"
+    onBack={onBack}
+    onSave={() => alert('（仮）カードが保存されました！')}
+    saveId="screen-e-save-btn"
     backLabel="連想入力に戻る"
   />
 );

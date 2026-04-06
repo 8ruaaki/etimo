@@ -158,8 +158,8 @@ ${etymologyList.map((e, i) => `${i + 1}. ${e}`).join('\n')}
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 2048,
+          temperature: 0.8,
+          maxOutputTokens: 4096,
           responseMimeType: 'application/json',
           responseSchema: {
             type: "OBJECT",
@@ -425,5 +425,87 @@ export const suggestOtherAssociations = async (word: string): Promise<string[]> 
   } catch (err: any) {
     console.error('[SuggestOther] Error:', err);
     throw err; // Re-throw to catch it in the UI and show the actual error
+  }
+};
+
+/**
+ * 語呂合わせを提案する (Gemini API)
+ */
+export const suggestMnemonic = async (word: string, meaning: string): Promise<string[]> => {
+  if (!GEMINI_API_KEY) {
+    console.warn('[SuggestMnemonic] VITE_GEMINI_API_KEY is not set. Returning mock result.');
+    return ['語呂合わせモック1', '語呂合わせモック2', '語呂合わせモック3'];
+  }
+
+  const prompt = `
+英単語「${word}」（意味：「${meaning}」）を暗記するための、質の高い「語呂合わせ」を3つ提案してください。
+
+【ルール】
+1. 対象単語の「発音（カタカナでの響き）」と「意味」を無理なく結びつけた、覚えやすくて面白い語呂合わせを作成してください。
+2. 語呂合わせの文と、その簡単な解説を含めてください。
+3. 出力は「語呂合わせの文（簡単な解説）」の形式のみとしてください。
+
+出力例：
+{
+  "mnemonics": [
+    "アッポー（Apple）が落ちてきてリンゴ（意味）に当たる（リンゴが落ちてくる様子をイメージ）",
+    "犬（Dog）がドッグ（Dog）フードを食べる（そのまんまのイメージ）",
+    "キャット（Cat）がキャッと（Cat）驚く猫（意味）（猫が驚く様子をイメージ）"
+  ]
+}
+
+必ず以下のJSON形式で出力してください：
+{
+  "mnemonics": ["(提案1)", "(提案2)", "(提案3)"]
+}
+
+重要：JSONフォーマットエラーを防ぐため、以下の点に必ず従ってください。
+1. JSONのキーと値は必ずダブルクォーテーション（"）で囲んでください。
+2. 提案内容の「値」の中にダブルクォーテーションを絶対に含めないでください。引用にはカギ括弧（「」）を使用してください。
+3. 提案内容の「値」の中に改行文字（\\n）を直接含めないでください。すべて1行の文字列として出力してください。
+`.trim();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.8,
+          maxOutputTokens: 2048,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              mnemonics: {
+                type: "ARRAY",
+                items: { type: "STRING" }
+              }
+            },
+            required: ["mnemonics"]
+          }
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!rawText) throw new Error('Empty response');
+
+    return extractArrayFromResponse(rawText, 'mnemonics');
+  } catch (err: any) {
+    console.error('[SuggestMnemonic] Error:', err);
+    throw err;
   }
 };
