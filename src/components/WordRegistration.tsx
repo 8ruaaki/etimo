@@ -116,7 +116,7 @@ export const WordRegistration: React.FC = () => {
             color: 'var(--text-primary)',
           }}
         >
-          <ArrowLeft size={18} />
+          <ArrowLeft size={18} color="currentColor" />
         </button>
         <div>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '2px' }}>単語帳</p>
@@ -536,7 +536,7 @@ const ScreenA: React.FC<{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           }}
         >
-          <ArrowLeft size={16} /> 別の単語を入力
+          <ArrowLeft size={16} color="currentColor" /> 別の単語を入力
         </button>
         <button
           id="screen-a-save-btn"
@@ -962,7 +962,7 @@ const ScreenB: React.FC<{
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           }}
         >
-          <ArrowLeft size={16} /> 戻る
+          <ArrowLeft size={16} color="currentColor" /> 戻る
         </button>
         <button
           className="btn-primary"
@@ -1182,7 +1182,7 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           }}
         >
-          <ArrowLeft size={16} /> 連想入力に戻る
+          <ArrowLeft size={16} color="currentColor" /> 連想入力に戻る
         </button>
         <button id="screen-c-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeEtymology])} disabled={isSaving}>
           <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
@@ -1348,7 +1348,7 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           }}
         >
-          <ArrowLeft size={16} /> 連想入力に戻る
+          <ArrowLeft size={16} color="currentColor" /> 連想入力に戻る
         </button>
         <button id="screen-d-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeRelationship])} disabled={isSaving}>
           <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
@@ -1514,7 +1514,7 @@ const ScreenE: React.FC<{ word: string; meaning: string; freeText: string; onBac
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           }}
         >
-          <ArrowLeft size={16} /> 連想入力に戻る
+          <ArrowLeft size={16} color="currentColor" /> 連想入力に戻る
         </button>
         <button id="screen-e-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeStory])} disabled={isSaving}>
           <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}

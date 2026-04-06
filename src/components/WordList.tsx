@@ -99,10 +99,11 @@ export const WordList: React.FC = () => {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              color: 'var(--text-primary)'
             }}
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={18} color="currentColor" />
           </button>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>
             {decodeURIComponent(title || '')} の単語一覧

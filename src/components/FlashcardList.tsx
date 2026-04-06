@@ -115,10 +115,11 @@ export const FlashcardList: React.FC = () => {
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '6px'
+              gap: '6px',
+              color: 'var(--text-primary)'
             }}
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={18} color="currentColor" />
           </button>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>単語帳一覧</h2>
         </div>
@@ -317,7 +318,8 @@ export const FlashcardList: React.FC = () => {
                   background: 'rgba(255,255,255,0.05)',
                   border: '1px solid var(--panel-border)',
                   borderRadius: '10px',
-                  cursor: 'pointer'
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)'
                 }}
               >
                 キャンセル
