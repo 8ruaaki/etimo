@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight, ArrowDown, Plus, RefreshCcw } from 'lucide-react';
 import { getKnownEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, type EtymologyPart } from '../api/wordRegistration';
+import { checkEtymologyMatch, suggestSimilarWords, suggestOtherAssociations, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD';
 
@@ -38,9 +38,18 @@ export const WordRegistration: React.FC = () => {
       // 2. Gemini で語源マッチを判定
       const matchResult = await checkEtymologyMatch(trimmed, etymologyList);
 
+      if (matchResult.isRealWord === false) {
+        const suggestion = matchResult.suggestedWord ? `もしかして：「${matchResult.suggestedWord}」ですか？` : '';
+        setError(`スペルが間違っている可能性があります。${suggestion}`);
+        setStep('input');
+        return;
+      }
+
+      // 語源マッチの有無に関わらず、意味はセットする
+      setTargetWordMeaning(matchResult.targetWordMeaning ?? '');
+
       if (matchResult.matched) {
         setEtymologyInfo(matchResult.explanation ?? '');
-        setTargetWordMeaning(matchResult.targetWordMeaning ?? '');
         setEtymologyParts(matchResult.parts ?? []);
         setStep('screenA');
       } else {
@@ -143,6 +152,7 @@ export const WordRegistration: React.FC = () => {
         {step === 'screenB' && (
           <ScreenB
             word={word}
+            targetWordMeaning={targetWordMeaning}
             freeText={freeText}
             setFreeText={setFreeText}
             onSimilarWord={() => setStep('screenC')}
@@ -539,12 +549,82 @@ const ScreenA: React.FC<{
 // ══════════════════════════════════════════════════════════════
 const ScreenB: React.FC<{
   word: string;
+  targetWordMeaning: string;
   freeText: string;
   setFreeText: (v: string) => void;
   onSimilarWord: () => void;
   onOther: () => void;
   onBack: () => void;
-}> = ({ word, freeText, setFreeText, onSimilarWord, onOther, onBack }) => (
+}> = ({ word, targetWordMeaning, freeText, setFreeText, onSimilarWord, onOther, onBack }) => {
+  const [selection, setSelection] = useState<'similar' | 'other' | null>(null);
+  
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+
+  const [otherSuggestions, setOtherSuggestions] = useState<string[]>([]);
+  const [otherSuggestionIndex, setOtherSuggestionIndex] = useState(0);
+  const [isSuggestingOther, setIsSuggestingOther] = useState(false);
+
+  const handleSuggest = async (forceFetch: boolean = false) => {
+    // もしすでに提案があり、かつ強制再フェッチでなければ次へサイクルする
+    if (!forceFetch && suggestions.length > 0) {
+      const nextIndex = (suggestionIndex + 1) % suggestions.length;
+      setSuggestionIndex(nextIndex);
+      setFreeText(suggestions[nextIndex]);
+      return;
+    }
+    
+    setIsSuggesting(true);
+    try {
+      const res = await suggestSimilarWords(word);
+      if (res && res.length > 0) {
+        setSuggestions(res);
+        setSuggestionIndex(0);
+        setFreeText(res[0]);
+      } else {
+        alert('似た単語の提案を取得できませんでした。');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`エラーが発生しました: ${err.message || err}`);
+    } finally {
+      setIsSuggesting(false);
+    }
+  };
+
+  const handleSuggestOther = async (forceFetch: boolean = false) => {
+    if (!forceFetch && otherSuggestions.length > 0) {
+      const nextIndex = (otherSuggestionIndex + 1) % otherSuggestions.length;
+      setOtherSuggestionIndex(nextIndex);
+      setFreeText(otherSuggestions[nextIndex]);
+      return;
+    }
+    
+    setIsSuggestingOther(true);
+    try {
+      const res = await suggestOtherAssociations(word);
+      if (res && res.length > 0) {
+        setOtherSuggestions(res);
+        setOtherSuggestionIndex(0);
+        setFreeText(res[0]);
+      } else {
+        alert('連想の提案を取得できませんでした。');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(`エラーが発生しました: ${err.message || err}`);
+    } finally {
+      setIsSuggestingOther(false);
+    }
+  };
+
+  const handleNext = () => {
+    if (selection === 'similar') onSimilarWord();
+    else if (selection === 'other') onOther();
+  };
+
+  return (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
     <div
       style={{
@@ -575,27 +655,18 @@ const ScreenB: React.FC<{
       }}
     >
       <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>この単語を見て思ったことを書いてください</p>
-      <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em' }}>{word}</h3>
-    </div>
-
-    {/* 自由入力 */}
-    <div>
-      <label className="label-text" htmlFor="free-text-input">思ったこと・連想したこと</label>
-      <textarea
-        id="free-text-input"
-        className="custom-input"
-        value={freeText}
-        onChange={e => setFreeText(e.target.value)}
-        placeholder="似た単語、イメージ、語呂合わせ、エピソードなど何でもOK..."
-        rows={4}
-        style={{ resize: 'vertical', lineHeight: 1.7 }}
-      />
+      <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>{word}</h3>
+      {targetWordMeaning && (
+        <p style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {targetWordMeaning}
+        </p>
+      )}
     </div>
 
     {/* 分岐ボタン */}
     <div>
       <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '14px', textAlign: 'center' }}>
-        上の入力はどちらに当てはまりますか？
+        まず、どちらのアプローチで暗記するか選択してください
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
         <ChoiceCard
@@ -604,8 +675,11 @@ const ScreenB: React.FC<{
           title="似た英単語"
           desc="別の英単語を思い浮かべた"
           color="#6366f1"
-          onClick={onSimilarWord}
-          disabled={!freeText.trim()}
+          onClick={() => {
+            setSelection('similar');
+            if (suggestions.length > 0) setFreeText(suggestions[suggestionIndex]);
+          }}
+          selected={selection === 'similar'}
         />
         <ChoiceCard
           id="btn-other"
@@ -613,36 +687,163 @@ const ScreenB: React.FC<{
           title="それ以外"
           desc="日本語・イメージ・語呂合わせなど"
           color="#0ea5e9"
-          onClick={onOther}
-          disabled={!freeText.trim()}
+          onClick={() => {
+            setSelection('other');
+            if (otherSuggestions.length > 0) setFreeText(otherSuggestions[otherSuggestionIndex]);
+          }}
+          selected={selection === 'other'}
         />
       </div>
-      {!freeText.trim() && (
-        <p style={{ textAlign: 'center', fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '10px' }}>
-          ※ 上の欄に入力してから選択してください
-        </p>
-      )}
     </div>
 
-    <button
-      onClick={onBack}
-      style={{
-        padding: '10px',
-        background: 'transparent',
-        border: 'none',
-        cursor: 'pointer',
-        color: 'var(--text-secondary)',
-        fontSize: '0.85rem',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '4px',
-      }}
-    >
-      <ArrowLeft size={14} /> 別の単語に戻る
-    </button>
+    {/* 自由入力 */}
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <label className="label-text" htmlFor="free-text-input" style={{ margin: 0 }}>思ったこと・連想したこと</label>
+        {selection === 'similar' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => handleSuggest(false)}
+              disabled={isSuggesting}
+              style={{
+                background: 'rgba(99,102,241,0.2)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                color: '#818cf8',
+                fontSize: '0.8rem',
+                cursor: isSuggesting ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'background 0.2s',
+              }}
+            >
+              <Sparkles size={14} />
+              {isSuggesting ? '提案中...' : suggestions.length > 0 ? '次の提案を見る' : '似た単語を提案'}
+            </button>
+            {suggestions.length > 0 && (
+              <button
+                onClick={() => handleSuggest(true)}
+                disabled={isSuggesting}
+                title="新しい提案をAIに考えさせる"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(99,102,241,0.4)',
+                  borderRadius: '8px',
+                  padding: '6px 10px',
+                  color: '#818cf8',
+                  fontSize: '0.8rem',
+                  cursor: isSuggesting ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'background 0.2s',
+                }}
+              >
+                <RefreshCcw size={14} />
+                再生成
+              </button>
+            )}
+          </div>
+        )}
+        {selection === 'other' && (
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={() => handleSuggestOther(false)}
+              disabled={isSuggestingOther}
+              style={{
+                background: 'rgba(14,165,233,0.2)',
+                border: '1px solid rgba(14,165,233,0.4)',
+                borderRadius: '8px',
+                padding: '6px 12px',
+                color: '#38bdf8',
+                fontSize: '0.8rem',
+                cursor: isSuggestingOther ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                transition: 'background 0.2s',
+              }}
+            >
+              <Sparkles size={14} />
+              {isSuggestingOther ? '提案中...' : otherSuggestions.length > 0 ? '別の連想を見る' : '連想を提案'}
+            </button>
+            {otherSuggestions.length > 0 && (
+              <button
+                onClick={() => handleSuggestOther(true)}
+                disabled={isSuggestingOther}
+                title="新しい連想をAIに考えさせる"
+                style={{
+                  background: 'transparent',
+                  border: '1px solid rgba(14,165,233,0.4)',
+                  borderRadius: '8px',
+                  padding: '6px 12px',
+                  color: '#38bdf8',
+                  fontSize: '0.8rem',
+                  cursor: isSuggestingOther ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  transition: 'background 0.2s',
+                }}
+              >
+                <RefreshCcw size={14} />
+                再生成
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+      <textarea
+        id="free-text-input"
+        className="custom-input"
+        value={freeText}
+        onChange={e => {
+          setFreeText(e.target.value);
+          // ユーザーが手動編集したら提案のサイクルをリセット
+          if (selection === 'similar' && suggestions.length > 0 && e.target.value !== suggestions[suggestionIndex]) {
+            setSuggestions([]);
+          }
+          if (selection === 'other' && otherSuggestions.length > 0 && e.target.value !== otherSuggestions[otherSuggestionIndex]) {
+            setOtherSuggestions([]);
+          }
+        }}
+        placeholder="似た単語、イメージ、語呂合わせ、エピソードなど何でもOK..."
+        rows={4}
+        style={{ resize: 'vertical', lineHeight: 1.7 }}
+      />
+    </div>
+
+    {/* ボタン群 */}
+    <div style={{ display: 'flex', gap: '12px' }}>
+      <button
+        onClick={onBack}
+        style={{
+          flex: 1,
+          padding: '12px',
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '10px',
+          cursor: 'pointer',
+          color: 'var(--text-primary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+        }}
+      >
+        <ArrowLeft size={16} /> 戻る
+      </button>
+      <button
+        className="btn-primary"
+        style={{ flex: 1 }}
+        onClick={handleNext}
+        disabled={!selection || !freeText.trim()}
+      >
+        次へ <ArrowRight size={16} />
+      </button>
+    </div>
   </div>
-);
+  );
+};
 
 const ChoiceCard: React.FC<{
   id: string;
@@ -651,44 +852,45 @@ const ChoiceCard: React.FC<{
   desc: string;
   color: string;
   onClick: () => void;
-  disabled: boolean;
-}> = ({ id, icon, title, desc, color, onClick, disabled }) => (
+  selected: boolean;
+}> = ({ id, icon, title, desc, color, onClick, selected }) => (
   <button
     id={id}
     onClick={onClick}
-    disabled={disabled}
     style={{
       padding: '20px 16px',
-      background: disabled ? 'rgba(255,255,255,0.03)' : `rgba(${hexToRgb(color)}, 0.08)`,
-      border: `2px solid ${disabled ? 'rgba(255,255,255,0.08)' : `${color}55`}`,
+      background: selected ? `rgba(${hexToRgb(color)}, 0.2)` : `rgba(${hexToRgb(color)}, 0.05)`,
+      border: `2px solid ${selected ? color : 'rgba(255,255,255,0.08)'}`,
       borderRadius: '14px',
-      cursor: disabled ? 'not-allowed' : 'pointer',
+      cursor: 'pointer',
       textAlign: 'center',
       transition: 'all 0.25s ease',
-      opacity: disabled ? 0.5 : 1,
       color: 'var(--text-primary)',
+      position: 'relative',
     }}
     onMouseEnter={e => {
-      if (!disabled) {
-        (e.currentTarget as HTMLButtonElement).style.background = `rgba(${hexToRgb(color)}, 0.16)`;
-        (e.currentTarget as HTMLButtonElement).style.borderColor = color;
+      if (!selected) {
+        (e.currentTarget as HTMLButtonElement).style.background = `rgba(${hexToRgb(color)}, 0.1)`;
+        (e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(${hexToRgb(color)}, 0.4)`;
         (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
       }
     }}
     onMouseLeave={e => {
-      if (!disabled) {
-        (e.currentTarget as HTMLButtonElement).style.background = `rgba(${hexToRgb(color)}, 0.08)`;
-        (e.currentTarget as HTMLButtonElement).style.borderColor = `${color}55`;
+      if (!selected) {
+        (e.currentTarget as HTMLButtonElement).style.background = `rgba(${hexToRgb(color)}, 0.05)`;
+        (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)';
         (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
       }
     }}
   >
+    {selected && (
+      <div style={{ position: 'absolute', top: '12px', right: '12px', color }}>
+        <CheckCircle size={20} />
+      </div>
+    )}
     <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>{icon}</div>
     <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '4px' }}>{title}</p>
     <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{desc}</p>
-    <div style={{ marginTop: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', color, fontSize: '0.8rem', fontWeight: 600 }}>
-      選択 <ArrowRight size={13} />
-    </div>
   </button>
 );
 
