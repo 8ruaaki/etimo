@@ -871,7 +871,16 @@ const ScreenB: React.FC<{
 
     try {
       const result = await generateCustomFakeEtymology(word, targetWordMeaning, parts, associationStr, aiModalIntent);
-      setAiModalResult({ explanation: result, integratedMeaning: '', parts: [] });
+      
+      // Update aiModalResult with explanation, integratedMeaning from AI, and parts built from user input
+      setAiModalResult({
+        explanation: result.explanation,
+        integratedMeaning: result.integratedMeaning,
+        parts: parts.map((p, i) => ({
+          part: p,
+          meaning: aiModalPartInputs[i].trim() || '（連想なし）'
+        }))
+      });
       setAiModalStep(3); // Go to display step
     } catch (err: any) {
       console.error(err);

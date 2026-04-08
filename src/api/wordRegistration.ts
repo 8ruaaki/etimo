@@ -761,9 +761,12 @@ export const generateCustomFakeEtymology = async (
   splittedWord: string[],
   association: string,
   userIntent: string
-): Promise<string> => {
+): Promise<{ explanation: string; integratedMeaning: string }> => {
   if (!GEMINI_API_KEY) {
-    return `（モック）${splittedWord.join('＋')} → ${targetWordMeaning}。背景: ${userIntent}`;
+    return {
+      explanation: `（モック）${splittedWord.join('＋')} → ${targetWordMeaning}。背景: ${userIntent}`,
+      integratedMeaning: `${splittedWord.join('＋')}→${targetWordMeaning}`
+    };
   }
 
   const prompt = `
@@ -782,8 +785,11 @@ export const generateCustomFakeEtymology = async (
 - 事実を淡々と述べる客観的で論理的な文体（だ・である調、または一般的な解説文）で作成してください。
 - 2〜3文程度（100文字〜150文字）で簡潔にまとめ、必ず「〜」と文末を完全に終わらせてください。途中で絶対に切らないでください。
 - 挨拶、前置き、総括（「このように〜」「というわけです」など）は不要です。
-- 【重要】出力の途中で文章が切れることを防ぐため、必ず最後に「。」（句点）を付けて完全に文を終わらせてください。
-- 最後に、各パーツの統合フレーズを「○○＋○○→○○」の形式で必ず含めてください。
+
+【出力形式】
+JSONフォーマットで、以下の2つのフィールドを出力してください。
+1. explanation: 上記のルールに従った解説文
+2. integratedMeaning: 各パーツの統合フレーズ（例：「○○＋○○→○○」の形式）
 `.trim();
 
   try {
@@ -795,6 +801,15 @@ export const generateCustomFakeEtymology = async (
         generationConfig: {
           temperature: 0.3,
           maxOutputTokens: 4096,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              explanation: { type: "STRING" },
+              integratedMeaning: { type: "STRING" }
+            },
+            required: ["explanation", "integratedMeaning"]
+          }
         },
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -813,7 +828,11 @@ export const generateCustomFakeEtymology = async (
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     if (!rawText) throw new Error('Empty response');
 
-    return rawText.trim();
+    const parsed = JSON.parse(rawText.trim());
+    return {
+      explanation: parsed.explanation || '',
+      integratedMeaning: parsed.integratedMeaning || ''
+    };
   } catch (err: any) {
     console.error('[GenerateCustomFakeEtymology] Error:', err);
     throw err;
