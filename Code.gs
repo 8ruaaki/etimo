@@ -64,6 +64,9 @@ function doPost(e) {
     if (action === 'getKnownEtymologies') {
       return handleGetKnownEtymologies(payload);
     }
+    if (action === 'getTestSheetEtymologies') {
+      return handleGetTestSheetEtymologies(payload);
+    }
     
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Unknown action' }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -949,6 +952,45 @@ function handleGetKnownEtymologies(payload) {
   return ContentService.createTextOutput(JSON.stringify({ 
     success: true, 
     knownEtymologies: knownEtymologies
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetTestSheetEtymologies(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var testSheet = ss.getSheetByName('test');
+  
+  if (!testSheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: 'testシートが見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  // testシートからB列（語源）のデータを取得
+  var data = testSheet.getDataRange().getValues();
+  var etymologies = [];
+  
+  // 1行目からデータを取得（ヘッダー行なし）
+  for (var i = 0; i < data.length; i++) {
+    if (data[i][1]) {  // B列に語源が存在する場合
+      // カンマ区切りで複数の語源が含まれている可能性を考慮
+      var etymologyStr = data[i][1].toString().trim();
+      if (etymologyStr) {
+        // カンマ、スペース、全角カンマで分割して個別の語源として追加
+        var parts = etymologyStr.split(/[,、\s]+/);
+        for (var j = 0; j < parts.length; j++) {
+          var part = parts[j].trim();
+          if (part && etymologies.indexOf(part) === -1) {
+            etymologies.push(part);
+          }
+        }
+      }
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    etymologies: etymologies
   })).setMimeType(ContentService.MimeType.JSON);
 }
 

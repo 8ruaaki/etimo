@@ -59,21 +59,23 @@ export const WordList: React.FC = () => {
   const handleDeleteWord = async (wordToDelete: string) => {
     if (!window.confirm(`「${wordToDelete}」を削除してもよろしいですか？`)) return;
 
+    // オプティミスティックUI更新：APIの完了を待たずにUIから即座に消す
+    setWords((prev) => prev.filter(w => w.word !== wordToDelete));
+
     try {
       const email = localStorage.getItem('email');
       if (!email) throw new Error('ログイン情報が見つかりません。');
       if (!title) return;
 
       const result = await deleteWordFromFlashcard(email, decodeURIComponent(title), wordToDelete);
-      if (result.success) {
-        // UIから削除
-        setWords((prev) => prev.filter(w => w.word !== wordToDelete));
-      } else {
-        alert(result.error || '削除に失敗しました。');
+      if (!result.success) {
+        alert(result.error || 'サーバーでの削除に失敗しました。再読み込みします。');
+        loadWords(); // 失敗した場合はリストを再取得して元に戻す
       }
     } catch (err: any) {
       console.error(err);
-      alert(err.message || '削除中にエラーが発生しました。');
+      alert(err.message || '削除中にエラーが発生しました。再読み込みします。');
+      loadWords(); // 失敗した場合はリストを再取得して元に戻す
     }
   };
 
@@ -86,7 +88,7 @@ export const WordList: React.FC = () => {
   }
 
   return (
-    <div className="glass-panel" style={{ padding: '40px', maxWidth: '800px', width: '100%', position: 'relative' }}>
+    <div className="glass-panel" style={{ padding: '40px', paddingBottom: '120px', maxWidth: '800px', width: '100%', position: 'relative' }}>
       <div className="flex-between" style={{ marginBottom: '30px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button

@@ -147,6 +147,28 @@ export const getKnownEtymologies = async (email: string) => {
   }
 };
 
+// testシートから語源リストを取得
+export const getTestSheetEtymologies = async () => {
+  if (!GAS_WEB_APP_URL) {
+    console.warn('VITE_GAS_WEB_APP_URL is not set. Returning empty array.');
+    return { success: true, etymologies: [] };
+  }
+
+  try {
+    const response = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'getTestSheetEtymologies'
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get test sheet etymologies:', error);
+    throw error;
+  }
+};
+
 // 単語帳の内容（単語リスト）を取得
 export const getFlashcard = async (email: string, title: string) => {
   if (!GAS_WEB_APP_URL) {

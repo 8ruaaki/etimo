@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, ArrowRight, ArrowDown, Plus, RefreshCcw, Save } from 'lucide-react';
 import { getTestSheetEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, generateCustomFakeEtymology, generateFakeEtymology, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
+import { checkEtymologyMatch, generateFakeEtymology, generateMnemonicStory, autoCompleteIntegration, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'selection' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
@@ -14,7 +14,6 @@ export const WordRegistration: React.FC = () => {
   const [word, setWord] = useState('');
   const [freeText, setFreeText] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [etymologyInfo, setEtymologyInfo] = useState<string>('');
   const [targetWordMeaning, setTargetWordMeaning] = useState<string>('');
   const [integratedMeaning, setIntegratedMeaning] = useState<string>('');
   const [etymologyParts, setEtymologyParts] = useState<EtymologyPart[]>([]);
@@ -48,7 +47,6 @@ export const WordRegistration: React.FC = () => {
 
       // 語源マッチの有無に関わらず、意味と語源情報はセットする
       setTargetWordMeaning(matchResult.targetWordMeaning ?? '');
-      setEtymologyInfo(matchResult.explanation ?? '');
       setEtymologyParts(matchResult.parts ?? []);
       setIntegratedMeaning(matchResult.integratedMeaning ?? '');
 
@@ -150,7 +148,6 @@ export const WordRegistration: React.FC = () => {
             word={word}
             targetWordMeaning={targetWordMeaning}
             integratedMeaning={integratedMeaning}
-            etymologyInfo={etymologyInfo}
             etymologyParts={etymologyParts}
             onBack={backToInput}
             onSave={handleSaveToSheet}
@@ -193,58 +190,77 @@ const InputStep: React.FC<{
   onJudge: () => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
   error: string | null;
-}> = ({ word, setWord, onJudge, onKeyDown, error }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-    <div>
-      <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '8px' }}>暗記したい英単語を入力</h3>
-      <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-        AIがあなたの語源リストと照合し、最適な暗記方法を提案します。
-      </p>
-    </div>
+}> = ({ word, setWord, onJudge, onKeyDown, error }) => {
+  const [isComposing, setIsComposing] = useState(false);
 
-    <div style={{ position: 'relative' }}>
-      <input
-        id="word-input"
-        type="text"
-        className="custom-input"
-        value={word}
-        onChange={e => setWord(e.target.value.replace(/[^a-zA-Z]/g, ''))}
-        onKeyDown={onKeyDown}
-        placeholder="例: company, precede, transport ..."
-        style={{ padding: '16px 52px 16px 20px', fontSize: '1.2rem', letterSpacing: '0.05em' }}
-        autoFocus
-      />
-      <div
-        style={{
-          position: 'absolute',
-          right: '16px',
-          top: '50%',
-          transform: 'translateY(-50%)',
-          color: 'var(--text-secondary)',
-        }}
-      >
-        <Search size={20} />
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <div>
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '8px' }}>暗記したい英単語を入力</h3>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+          AIがあなたの語源リストと照合し、最適な暗記方法を提案します。
+        </p>
       </div>
+
+      <div style={{ position: 'relative' }}>
+        <input
+          id="word-input"
+          type="text"
+          inputMode="url"
+          className="custom-input"
+          value={word}
+          onCompositionStart={() => setIsComposing(true)}
+          onCompositionEnd={(e) => {
+            setIsComposing(false);
+            const normalized = e.currentTarget.value.replace(/[Ａ-Ｚａ-ｚ]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+            setWord(normalized.replace(/[^a-zA-Z]/g, ''));
+          }}
+          onChange={e => {
+            if (isComposing) {
+              setWord(e.target.value);
+            } else {
+              const normalized = e.target.value.replace(/[Ａ-Ｚａ-ｚ]/g, (s) => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+              setWord(normalized.replace(/[^a-zA-Z]/g, ''));
+            }
+          }}
+          onKeyDown={onKeyDown}
+          pattern="[a-zA-Z]*"
+          placeholder="例: company, precede, transport ..."
+          style={{ padding: '16px 52px 16px 20px', fontSize: '1.2rem', letterSpacing: '0.05em' }}
+          autoFocus
+        />
+        <div
+          style={{
+            position: 'absolute',
+            right: '16px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--text-secondary)',
+          }}
+        >
+          <Search size={20} />
+        </div>
+      </div>
+
+      {error && (
+        <p style={{ color: 'var(--error-color)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          ⚠️ {error}
+        </p>
+      )}
+
+      <button
+        id="judge-btn"
+        className="btn-primary"
+        onClick={onJudge}
+        disabled={!word.trim()}
+        style={{ opacity: word.trim() ? 1 : 0.45 }}
+      >
+        <Sparkles size={18} />
+        AI判定を開始
+      </button>
     </div>
-
-    {error && (
-      <p style={{ color: 'var(--error-color)', fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-        ⚠️ {error}
-      </p>
-    )}
-
-    <button
-      id="judge-btn"
-      className="btn-primary"
-      onClick={onJudge}
-      disabled={!word.trim()}
-      style={{ opacity: word.trim() ? 1 : 0.45 }}
-    >
-      <Sparkles size={18} />
-      AI判定を開始
-    </button>
-  </div>
-);
+  );
+};
 
 // ══════════════════════════════════════════════════════════════
 // 判定中
@@ -387,14 +403,13 @@ const ScreenA: React.FC<{
   word: string;
   targetWordMeaning: string;
   integratedMeaning: string;
-  etymologyInfo: string;
   etymologyParts: EtymologyPart[];
   onBack: () => void;
   onSave: (rowData: string[]) => void;
   isSaving: boolean;
   flashcardTitle: string;
   onGoToSelection: () => void;
-}> = ({ word, targetWordMeaning, integratedMeaning, etymologyInfo, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToSelection }) => {
+}> = ({ word, targetWordMeaning, integratedMeaning, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToSelection }) => {
   const [selectedPartIndex, setSelectedPartIndex] = useState<number | null>(null);
 
   const openModal = (partIndex: number) => {
@@ -567,20 +582,6 @@ const ScreenA: React.FC<{
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {(!etymologyParts || etymologyParts.length === 0) && etymologyInfo && (
-        <div
-          style={{
-            padding: '28px',
-            background: 'rgba(16,185,129,0.06)',
-            border: '1px solid rgba(16,185,129,0.2)',
-            borderRadius: '16px',
-          }}
-        >
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
-          <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{etymologyInfo}</p>
         </div>
       )}
 
@@ -810,12 +811,11 @@ const ScreenB: React.FC<{
   isSaving: boolean;
   onBack: () => void;
 }> = ({ word, targetWordMeaning, freeText: _freeText, setFreeText: _setFreeText, onSave, isSaving, onBack }) => {
-  const [aiModalStep, setAiModalStep] = useState<1 | 2 | 3>(1);
-  const [aiModalResult, setAiModalResult] = useState<{ explanation: string; integratedMeaning: string; parts: { part: string; meaning: string }[] } | null>(null);
-  const [isAIProcessing, setIsAIProcessing] = useState(false);
+  const [aiModalStep, setAiModalStep] = useState<1 | 2>(1);
   const [splitPoints, setSplitPoints] = useState<boolean[]>(new Array(word.length - 1).fill(false));
   const [aiModalPartInputs, setAiModalPartInputs] = useState<string[]>([]);
   const [aiIntermediateSteps, setAiIntermediateSteps] = useState<string[]>(['']);
+  const [isGeneratingIntegration, setIsGeneratingIntegration] = useState(false);
 
   // Update text when freeText changes
   useEffect(() => {
@@ -836,6 +836,21 @@ const ScreenB: React.FC<{
     return parts;
   };
 
+  const handleAutoGenerateIntegration = async () => {
+    const parts = getWordParts();
+    setIsGeneratingIntegration(true);
+    try {
+      const result = await autoCompleteIntegration(word, targetWordMeaning, parts, aiModalPartInputs);
+      setAiModalPartInputs(result.partMeanings);
+      setAiIntermediateSteps(result.intermediateSteps.filter(s => s.trim() !== ''));
+    } catch (err) {
+      console.error(err);
+      alert('AI自動生成に失敗しました。');
+    } finally {
+      setIsGeneratingIntegration(false);
+    }
+  };
+
   const handleNextStep = () => {
     const parts = getWordParts();
     setAiModalPartInputs(new Array(parts.length).fill(''));
@@ -851,14 +866,12 @@ const ScreenB: React.FC<{
     });
   };
 
-  const handleAIConnect = async () => {
+  const handleSaveClick = () => {
     const isAnyFilled = aiModalPartInputs.some(input => input.trim());
     if (!isAnyFilled) {
       alert('少なくとも1つのパーツに意味を入力してください。');
       return;
     }
-
-    setIsAIProcessing(true);
 
     const parts = getWordParts();
     
@@ -866,38 +879,11 @@ const ScreenB: React.FC<{
     const partsStr = parts.map((p, i) => `${p}（${aiModalPartInputs[i].trim() || '意味なし'}）`).join(' ＋ ');
     const validIntermediateSteps = aiIntermediateSteps.filter(s => s.trim());
     const chainSteps = [partsStr, ...validIntermediateSteps, targetWordMeaning];
-    const integrationChain = chainSteps.join(' → ');
 
-    try {
-      const explanation = await generateCustomFakeEtymology(word, targetWordMeaning, integrationChain);
-      
-      // Update aiModalResult with explanation from AI, and integratedMeaning/parts built from user input
-      setAiModalResult({
-        explanation: explanation,
-        integratedMeaning: integrationChain,
-        parts: parts.map((p, i) => ({
-          part: p,
-          meaning: aiModalPartInputs[i].trim() || '（意味なし）'
-        }))
-      });
-      setAiModalStep(3); // Go to display step
-    } catch (err: any) {
-      console.error(err);
-      alert(`エラーが発生しました: ${err.message || err}`);
-    } finally {
-      setIsAIProcessing(false);
-    }
-  };
-
-  const handleSaveClick = () => {
-    if (!aiModalResult) {
-      alert('連想内容を生成してください。');
-      return;
-    }
     const rowData: string[] = ['0', word, targetWordMeaning];
     
     // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
-    const partsToSave = aiModalResult.parts.slice(0, 4);
+    const partsToSave = parts.map((p, i) => ({ part: p, meaning: aiModalPartInputs[i].trim() || '（意味なし）' })).slice(0, 4);
     partsToSave.forEach(p => {
       rowData.push(p.part);
       rowData.push(p.meaning);
@@ -909,12 +895,9 @@ const ScreenB: React.FC<{
     }
 
     // L列以降 (インデックス11〜) に統合イメージを分割して入れる
-    if (aiModalResult.integratedMeaning) {
-      const steps = aiModalResult.integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
-      steps.forEach(step => {
-        rowData.push(step);
-      });
-    }
+    chainSteps.forEach(step => {
+      rowData.push(step);
+    });
 
     onSave(rowData);
   };
@@ -1060,6 +1043,41 @@ const ScreenB: React.FC<{
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', margin: '16px 0' }}>
               <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>各パーツの意味と、意味の変化（統合イメージ）を入力してください</p>
 
+              <button
+                onClick={handleAutoGenerateIntegration}
+                disabled={isGeneratingIntegration}
+                style={{
+                  padding: '10px 20px',
+                  background: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.4)',
+                  borderRadius: '999px',
+                  color: '#3b82f6',
+                  fontWeight: 600,
+                  fontSize: '0.95rem',
+                  cursor: isGeneratingIntegration ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  transition: 'all 0.2s',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)',
+                  opacity: isGeneratingIntegration ? 0.7 : 1,
+                }}
+                onMouseEnter={e => !isGeneratingIntegration && (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)')}
+                onMouseLeave={e => !isGeneratingIntegration && (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)')}
+              >
+                {isGeneratingIntegration ? (
+                  <>
+                    <RefreshCcw size={16} className="spin-animation" />
+                    AIが考え中...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={16} />
+                    AIにおまかせ自動入力
+                  </>
+                )}
+              </button>
+
               {/* Parts Section */}
               <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '16px', border: '1px solid var(--panel-border)', width: '100%' }}>
                 {getWordParts().map((part, idx) => (
@@ -1162,210 +1180,40 @@ const ScreenB: React.FC<{
                 <ArrowLeft size={18} /> 戻る
               </button>
               <button
-                onClick={handleAIConnect}
-                disabled={isAIProcessing || !aiModalPartInputs.some(input => input.trim())}
+                onClick={handleSaveClick}
+                disabled={isSaving || !aiModalPartInputs.some(input => input.trim())}
                 style={{
                   flex: 2,
                   padding: '16px',
-                  background: isAIProcessing || !aiModalPartInputs.some(input => input.trim()) ? 'rgba(99,102,241,0.3)' : 'var(--primary-color)',
+                  background: isSaving || !aiModalPartInputs.some(input => input.trim()) ? 'rgba(99,102,241,0.3)' : 'var(--primary-color)',
                   border: 'none',
                   borderRadius: '8px',
                   color: 'white',
                   fontWeight: 600,
                   fontSize: '1rem',
-                  cursor: isAIProcessing || !aiModalPartInputs.some(input => input.trim()) ? 'not-allowed' : 'pointer',
+                  cursor: isSaving || !aiModalPartInputs.some(input => input.trim()) ? 'not-allowed' : 'pointer',
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
                   gap: '8px',
                 }}
               >
-                {isAIProcessing ? (
+                {isSaving ? (
                   <>
                     <RefreshCcw size={18} className="spin-animation" />
-                    AIで解説文を作成中...
+                    保存中...
                   </>
                 ) : (
                   <>
-                    <Sparkles size={18} />
-                    AIで解説文を作成する
+                    <Save size={18} />
+                    保存する
                   </>
                 )}
               </button>
             </div>
           </>
         )}
-
-        {aiModalStep === 3 && aiModalResult && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div
-              style={{
-                padding: '6px 14px',
-                background: 'rgba(99,102,241,0.15)',
-                border: '1px solid rgba(99,102,241,0.4)',
-                borderRadius: '999px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                width: 'fit-content',
-                color: '#818cf8',
-                fontSize: '0.85rem',
-                fontWeight: 600,
-                margin: '0 auto',
-              }}
-            >
-              ✅ あなた専用の語源（AI生成）
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
-                  自由連想から作成した語源
-                </h4>
-              </div>
-
-              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
-                {aiModalResult.parts.map((part, idx) => (
-                  <React.Fragment key={idx}>
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '8px',
-                      width: '200px'
-                    }}>
-                      <div
-                        style={{
-                          background: 'rgba(99,102,241,0.15)',
-                          color: '#818cf8',
-                          padding: '8px 16px',
-                          borderRadius: '8px',
-                          fontWeight: 700,
-                          fontSize: '1.4rem',
-                          textAlign: 'center',
-                          width: '100%',
-                          border: '2px solid transparent',
-                        }}
-                      >
-                        {part.part}
-                      </div>
-                      <div style={{ color: 'var(--text-secondary)' }}>
-                        <ArrowDown size={20} />
-                      </div>
-                      <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
-                        {part.meaning}
-                      </div>
-                    </div>
-                    {idx < aiModalResult.parts.length - 1 && (
-                      <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
-                        <Plus size={24} color="var(--text-secondary)" />
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-
-              <div style={{
-                marginTop: '24px',
-                padding: '24px',
-                background: 'rgba(99,102,241,0.05)',
-                border: '1px solid rgba(99,102,241,0.2)',
-                borderRadius: '16px',
-                textAlign: 'center',
-              }}>
-                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '20px', fontWeight: 600 }}>パーツの統合イメージ</p>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                  {aiModalResult.integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean).map((step, idx, arr) => (
-                    <React.Fragment key={idx}>
-                      <div style={{
-                        padding: '12px 24px',
-                        background: 'rgba(99,102,241,0.12)',
-                        border: '1px solid rgba(99,102,241,0.3)',
-                        borderRadius: '10px',
-                        fontSize: '1.2rem',
-                        fontWeight: 700,
-                        color: '#818cf8',
-                        letterSpacing: '0.05em',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                      }}>
-                        {step}
-                      </div>
-                      {idx < arr.length - 1 && (
-                        <div style={{ color: 'rgba(99,102,241,0.5)', padding: '6px 0' }}>
-                          <ArrowDown size={28} />
-                        </div>
-                      )}
-                    </React.Fragment>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                padding: '28px',
-                background: 'rgba(99,102,241,0.06)',
-                border: '1px solid rgba(99,102,241,0.2)',
-                borderRadius: '16px',
-              }}
-            >
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
-              <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{aiModalResult.explanation}</p>
-            </div>
-            
-            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
-              <button
-                onClick={() => setAiModalStep(2)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--panel-border)',
-                  borderRadius: '8px',
-                  color: 'var(--text-primary)',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <ArrowLeft size={18} /> 再生成する
-              </button>
-            </div>
-          </div>
-        )}
       </div>
-
-      {/* ボタン群 */}
-      {aiModalStep === 3 && (
-        <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
-          <button
-            onClick={onBack}
-            style={{
-              flex: 1,
-              padding: '12px',
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid var(--panel-border)',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              color: 'var(--text-primary)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-            }}
-          >
-            <ArrowLeft size={16} color="currentColor" /> 戻る
-          </button>
-          <button
-            className="btn-primary"
-            style={{ flex: 1 }}
-            onClick={handleSaveClick}
-            disabled={isSaving || !aiModalResult}
-          >
-            {isSaving ? '保存中...' : '保存'} <Save size={16} />
-          </button>
-        </div>
-      )}
     </div>
   );
 };
