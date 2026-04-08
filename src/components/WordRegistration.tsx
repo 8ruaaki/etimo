@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, ArrowRight, ArrowDown, Plus, RefreshCcw, Save } from 'lucide-react';
 import { getTestSheetEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, generateCustomFakeEtymology, draftUserIntent, generateFakeEtymology, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
+import { checkEtymologyMatch, generateCustomFakeEtymology, generateFakeEtymology, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'selection' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
@@ -815,8 +815,7 @@ const ScreenB: React.FC<{
   const [isAIProcessing, setIsAIProcessing] = useState(false);
   const [splitPoints, setSplitPoints] = useState<boolean[]>(new Array(word.length - 1).fill(false));
   const [aiModalPartInputs, setAiModalPartInputs] = useState<string[]>([]);
-  const [aiModalIntent, setAiModalIntent] = useState<string>('');
-  const [isDraftingIntent, setIsDraftingIntent] = useState(false);
+  const [aiIntermediateSteps, setAiIntermediateSteps] = useState<string[]>(['']);
 
   // Update text when freeText changes
   useEffect(() => {
@@ -840,7 +839,7 @@ const ScreenB: React.FC<{
   const handleNextStep = () => {
     const parts = getWordParts();
     setAiModalPartInputs(new Array(parts.length).fill(''));
-    setAiModalIntent('');
+    setAiIntermediateSteps(['']);
     setAiModalStep(2);
   };
 
@@ -855,30 +854,30 @@ const ScreenB: React.FC<{
   const handleAIConnect = async () => {
     const isAnyFilled = aiModalPartInputs.some(input => input.trim());
     if (!isAnyFilled) {
-      alert('少なくとも1つのパーツに連想を入力してください。');
+      alert('少なくとも1つのパーツに意味を入力してください。');
       return;
     }
 
     setIsAIProcessing(true);
 
     const parts = getWordParts();
-    // const splittedWord = parts.join(' / '); // Commenting this out to avoid confusion
-
-    const associationStr = parts.map((p, i) => {
-      const val = aiModalPartInputs[i].trim();
-      return val ? `${p}(${val})` : p;
-    }).join(' ＋ ');
+    
+    // ユーザーが作成した統合イメージを組み立てる
+    const partsStr = parts.map((p, i) => `${p}（${aiModalPartInputs[i].trim() || '意味なし'}）`).join(' ＋ ');
+    const validIntermediateSteps = aiIntermediateSteps.filter(s => s.trim());
+    const chainSteps = [partsStr, ...validIntermediateSteps, targetWordMeaning];
+    const integrationChain = chainSteps.join(' → ');
 
     try {
-      const result = await generateCustomFakeEtymology(word, targetWordMeaning, parts, associationStr, aiModalIntent);
+      const explanation = await generateCustomFakeEtymology(word, targetWordMeaning, integrationChain);
       
-      // Update aiModalResult with explanation, integratedMeaning from AI, and parts built from user input
+      // Update aiModalResult with explanation from AI, and integratedMeaning/parts built from user input
       setAiModalResult({
-        explanation: result.explanation,
-        integratedMeaning: result.integratedMeaning,
+        explanation: explanation,
+        integratedMeaning: integrationChain,
         parts: parts.map((p, i) => ({
           part: p,
-          meaning: aiModalPartInputs[i].trim() || '（連想なし）'
+          meaning: aiModalPartInputs[i].trim() || '（意味なし）'
         }))
       });
       setAiModalStep(3); // Go to display step
@@ -887,32 +886,6 @@ const ScreenB: React.FC<{
       alert(`エラーが発生しました: ${err.message || err}`);
     } finally {
       setIsAIProcessing(false);
-    }
-  };
-
-  const handleDraftIntent = async () => {
-    const isAnyFilled = aiModalPartInputs.some(input => input.trim());
-    if (!isAnyFilled) {
-      alert('少なくとも1つのパーツに連想を入力してください。');
-      return;
-    }
-
-    setIsDraftingIntent(true);
-    const parts = getWordParts();
-    // const splittedWord = parts.join(' / ');
-    const associationStr = parts.map((p, i) => {
-      const val = aiModalPartInputs[i].trim();
-      return val ? `${p}(${val})` : p;
-    }).join(' ＋ ');
-
-    try {
-      const draft = await draftUserIntent(word, targetWordMeaning, parts, associationStr);
-      setAiModalIntent(draft);
-    } catch (err: any) {
-      console.error(err);
-      alert('意図・背景の生成に失敗しました');
-    } finally {
-      setIsDraftingIntent(false);
     }
   };
 
@@ -1084,15 +1057,17 @@ const ScreenB: React.FC<{
 
         {aiModalStep === 2 && (
           <>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', margin: '8px 0 16px 0' }}>
-              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>それぞれのパーツから連想することを入力してください</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', margin: '16px 0' }}>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>各パーツの意味と、意味の変化（統合イメージ）を入力してください</p>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginTop: '12px', width: '100%' }}>
+              {/* Parts Section */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '16px', border: '1px solid var(--panel-border)', width: '100%' }}>
                 {getWordParts().map((part, idx) => (
                   <React.Fragment key={idx}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
-                      <span style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{part}</span>
-                      <textarea
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981' }}>{part}</span>
+                      <input
+                        type="text"
                         className="custom-input"
                         value={aiModalPartInputs[idx] || ''}
                         onChange={(e) => {
@@ -1100,63 +1075,72 @@ const ScreenB: React.FC<{
                           newInputs[idx] = e.target.value;
                           setAiModalPartInputs(newInputs);
                         }}
-                        placeholder={`${part} から連想すること...`}
-                        rows={(aiModalPartInputs[idx] || '').split('\n').length || 1}
-                        style={{ width: '100%', maxWidth: '500px', padding: '14px', fontSize: '1.2rem', textAlign: 'center', resize: 'vertical', lineHeight: '1.5' }}
+                        placeholder="パーツの意味"
+                        style={{ width: '140px', textAlign: 'center', padding: '8px', fontSize: '1rem' }}
                       />
                     </div>
                     {idx < getWordParts().length - 1 && (
-                      <div style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>+</div>
+                      <div style={{ display: 'flex', alignItems: 'center', height: '60px', fontSize: '1.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>＋</div>
                     )}
                   </React.Fragment>
                 ))}
               </div>
 
-              <div style={{ marginTop: '24px', width: '100%', maxWidth: '500px' }}>
-                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px', textAlign: 'center' }}>
-                  （任意）連想した意図や背景があれば自由に書いてください
-                </p>
-                <textarea
-                  className="custom-input"
-                  value={aiModalIntent}
-                  onChange={(e) => setAiModalIntent(e.target.value)}
-                  placeholder="例：主人公が冒険に出るファンタジーのような世界観で..."
-                  rows={3}
-                  style={{ width: '100%', padding: '14px', fontSize: '1rem', resize: 'vertical', lineHeight: '1.5' }}
-                />
-                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                  <button
-                    onClick={handleDraftIntent}
-                    disabled={isDraftingIntent || !aiModalPartInputs.some(input => input.trim())}
-                    style={{
-                      background: 'rgba(99,102,241,0.1)',
-                      border: '1px solid rgba(99,102,241,0.3)',
-                      color: '#818cf8',
-                      borderRadius: '8px',
-                      padding: '8px 16px',
-                      fontSize: '0.9rem',
-                      fontWeight: 600,
-                      cursor: (isDraftingIntent || !aiModalPartInputs.some(input => input.trim())) ? 'not-allowed' : 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      transition: 'all 0.2s',
-                      opacity: (isDraftingIntent || !aiModalPartInputs.some(input => input.trim())) ? 0.6 : 1
-                    }}
-                    onMouseEnter={e => { if (!isDraftingIntent && aiModalPartInputs.some(input => input.trim())) e.currentTarget.style.background = 'rgba(99,102,241,0.2)'; }}
-                    onMouseLeave={e => { if (!isDraftingIntent) e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; }}
-                  >
-                    {isDraftingIntent ? (
-                      <><RefreshCcw size={14} className="spin-animation" /> 考えています...</>
-                    ) : (
-                      <><Sparkles size={14} /> AIに背景ストーリーを考えてもらう</>
-                    )}
-                  </button>
-                </div>
+              <ArrowDown size={32} color="rgba(99,102,241,0.5)" />
+
+              {/* Intermediate Steps Section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', alignItems: 'center' }}>
+                {aiIntermediateSteps.map((step, idx) => (
+                  <React.Fragment key={idx}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', maxWidth: '500px' }}>
+                      <input
+                        type="text"
+                        className="custom-input"
+                        value={step}
+                        onChange={(e) => {
+                          const newSteps = [...aiIntermediateSteps];
+                          newSteps[idx] = e.target.value;
+                          setAiIntermediateSteps(newSteps);
+                        }}
+                        placeholder={`変化 ${idx + 1}`}
+                        style={{ flex: 1, padding: '16px', textAlign: 'center', fontSize: '1.2rem', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', fontWeight: 600 }}
+                      />
+                      <button
+                        onClick={() => {
+                          const newSteps = aiIntermediateSteps.filter((_, i) => i !== idx);
+                          setAiIntermediateSteps(newSteps);
+                        }}
+                        style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', borderRadius: '8px', width: '44px', height: '44px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.2rem', transition: 'all 0.2s' }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                        title="削除"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <ArrowDown size={32} color="rgba(99,102,241,0.5)" />
+                  </React.Fragment>
+                ))}
+
+                <button
+                  onClick={() => setAiIntermediateSteps([...aiIntermediateSteps, ''])}
+                  style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px dashed var(--panel-border)', borderRadius: '8px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', transition: 'all 0.2s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  <Plus size={18} /> 変化を追加
+                </button>
+
+                <ArrowDown size={32} color="rgba(99,102,241,0.5)" />
+              </div>
+
+              {/* Final Meaning Section */}
+              <div style={{ padding: '16px 24px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: '12px', fontSize: '1.4rem', fontWeight: 800, textAlign: 'center', width: '100%', maxWidth: '500px' }}>
+                {targetWordMeaning}
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
               <button
                 onClick={() => setAiModalStep(1)}
                 style={{
@@ -1199,12 +1183,12 @@ const ScreenB: React.FC<{
                 {isAIProcessing ? (
                   <>
                     <RefreshCcw size={18} className="spin-animation" />
-                    AIで結びつけています...
+                    AIで解説文を作成中...
                   </>
                 ) : (
                   <>
                     <Sparkles size={18} />
-                    AIで結びつける
+                    AIで解説文を作成する
                   </>
                 )}
               </button>

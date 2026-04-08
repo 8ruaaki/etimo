@@ -761,38 +761,28 @@ ${association}
 export const generateCustomFakeEtymology = async (
   word: string,
   targetWordMeaning: string,
-  splittedWord: string[],
-  association: string,
-  userIntent: string
-): Promise<{ explanation: string; integratedMeaning: string }> => {
+  integrationChain: string
+): Promise<string> => {
   if (!GEMINI_API_KEY) {
-    return {
-      explanation: `（モック）${splittedWord.join('＋')} → ${targetWordMeaning}。背景: ${userIntent}`,
-      integratedMeaning: `${splittedWord.join('＋')}→${targetWordMeaning}`
-    };
+    return `（モック）${integrationChain}に基づいて説明します。`;
   }
 
   const prompt = `
 あなたは英語辞書・語源辞典の編集者です。
-英単語「${word}」（意味：「${targetWordMeaning}」）について、以下の【構成要素（パーツとその意味）と背景ストーリー】をもとに、
-「${targetWordMeaning}」という本来の意味へと至る、客観的で論理的な語源解説を作成してください。
+英単語「${word}」（意味：「${targetWordMeaning}」）について、以下の【語源統合プロセス（パーツの意味から本来の意味への変遷）】をもとに、
+客観的で論理的な語源解説を作成してください。
 
-【構成要素（パーツとその意味）と背景ストーリー】
-・各パーツの構成: ${association}
-・背景（由来）: ${userIntent}
+【語源統合プロセス】
+${integrationChain}
 
 【ルール】
-- 【最重要】「学習者の連想」「ユーザーの入力」「背景ストーリー」「連想」といった、メタな発言やネタばらしは絶対に含めないでください。すべてが歴史的な事実や真実の語源であるかのように、断定的かつ客観的な辞書的トーンで解説してください。
-- 上記の構成内容と背景を論理的に統合し、最終的に「${targetWordMeaning}」という本来の意味へどのように繋がるのかを客観的に解説してください。
+- 【最重要】「学習者の連想」「ユーザーの入力」「語源統合プロセス」といったメタな発言やネタばらしは絶対に含めないでください。すべてが歴史的な事実や真実の語源であるかのように、断定的かつ客観的な辞書的トーンで解説してください。
+- 上記のプロセスに沿って、各パーツがどのように組み合わさって最終的な意味に繋がるのかを客観的に解説してください。
 - ファンタジーや魔法のような架空の設定（「〜という魔法」「〜という呪文」など）や物語調、比喩的な表現は一切排除してください。
 - 事実を淡々と述べる客観的で論理的な文体（だ・である調、または一般的な解説文）で作成してください。
-- 2〜3文程度（100文字〜150文字）で簡潔にまとめ、必ず「〜」と文末を完全に終わらせてください。途中で絶対に切らないでください。
+- 2〜3文程度（100文字〜150文字）で簡潔にまとめ、必ず「。」（句点）で終わらせてください。途中で絶対に切らないでください。
 - 挨拶、前置き、総括（「このように〜」「というわけです」など）は不要です。
-
-【出力形式】
-JSONフォーマットで、以下の2つのフィールドを出力してください。
-1. explanation: 上記のルールに従った解説文
-2. integratedMeaning: 各パーツの統合フレーズ。最初のステップは必ずそれぞれの「構成要素の意味」を「＋」で結んだものにし、各段階を必ず「→」でつなぎ、最後は必ず最終的な意味である「${targetWordMeaning}」で終わるようにしてください。（例：「[パーツ1の意味]＋[パーツ2の意味]→○○→${targetWordMeaning}」の形式）
+- JSON形式ではなく、純粋なテキストのみを出力してください。
 `.trim();
 
   try {
@@ -804,15 +794,6 @@ JSONフォーマットで、以下の2つのフィールドを出力してくだ
         generationConfig: {
           temperature: 0.3,
           maxOutputTokens: 4096,
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: "OBJECT",
-            properties: {
-              explanation: { type: "STRING" },
-              integratedMeaning: { type: "STRING" }
-            },
-            required: ["explanation", "integratedMeaning"]
-          }
         },
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
@@ -831,11 +812,7 @@ JSONフォーマットで、以下の2つのフィールドを出力してくだ
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
     if (!rawText) throw new Error('Empty response');
 
-    const parsed = JSON.parse(rawText.trim());
-    return {
-      explanation: parsed.explanation || '',
-      integratedMeaning: parsed.integratedMeaning || ''
-    };
+    return rawText.trim();
   } catch (err: any) {
     console.error('[GenerateCustomFakeEtymology] Error:', err);
     throw err;
