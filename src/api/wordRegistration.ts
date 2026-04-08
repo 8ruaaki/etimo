@@ -789,7 +789,7 @@ export const generateCustomFakeEtymology = async (
 【出力形式】
 JSONフォーマットで、以下の2つのフィールドを出力してください。
 1. explanation: 上記のルールに従った解説文
-2. integratedMeaning: 各パーツの統合フレーズ（例：「○○＋○○→○○」の形式）
+2. integratedMeaning: 各パーツの統合フレーズ。各段階を必ず「→」でつなぎ、最後は必ず最終的な意味である「${targetWordMeaning}」で終わるようにしてください。（例：「○○＋○○→○○→${targetWordMeaning}」の形式）
 `.trim();
 
   try {
