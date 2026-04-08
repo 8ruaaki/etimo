@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, CheckCircle, ArrowRight, ArrowDown, Plus, RefreshCcw } from 'lucide-react';
-import { getKnownEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, suggestSimilarWords, suggestOtherAssociations, suggestMnemonic, generateFakeEtymology, generateFakeRelationship, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
+import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, ArrowRight, ArrowDown, Plus, RefreshCcw, Save } from 'lucide-react';
+import { getTestSheetEtymologies, addWordToFlashcard } from '../api/flashcard';
+import { checkEtymologyMatch, generateCustomFakeEtymology, draftUserIntent, generateFakeEtymology, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
 
-type Step = 'input' | 'judging' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
+type Step = 'input' | 'judging' | 'selection' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
 export const WordRegistration: React.FC = () => {
   const navigate = useNavigate();
@@ -32,9 +32,9 @@ export const WordRegistration: React.FC = () => {
       const email = localStorage.getItem('email');
       if (!email) throw new Error('ログイン情報が見つかりません。');
 
-      // 1. 語源リストを取得
-      const etymResult = await getKnownEtymologies(email);
-      const etymologyList: string[] = etymResult.knownEtymologies ?? [];
+      // 1. testシートから語源リストを取得
+      const etymResult = await getTestSheetEtymologies();
+      const etymologyList: string[] = etymResult.etymologies ?? [];
 
       // 2. Gemini で語源マッチを判定
       const matchResult = await checkEtymologyMatch(trimmed, etymologyList);
@@ -55,7 +55,7 @@ export const WordRegistration: React.FC = () => {
       if (matchResult.matched) {
         setStep('screenA');
       } else {
-        setStep('screenB');
+        setStep('selection');
       }
     } catch (err: any) {
       console.error(err);
@@ -136,6 +136,15 @@ export const WordRegistration: React.FC = () => {
           />
         )}
         {step === 'judging' && <JudgingStep />}
+        {step === 'selection' && (
+          <SelectionStep
+            word={word}
+            targetWordMeaning={targetWordMeaning}
+            onSelectFakeEtymology={() => setStep('screenB')}
+            onSelectStory={() => setStep('screenD')}
+            onBack={backToInput}
+          />
+        )}
         {step === 'screenA' && (
           <ScreenA
             word={word}
@@ -147,7 +156,7 @@ export const WordRegistration: React.FC = () => {
             onSave={handleSaveToSheet}
             isSaving={isSaving}
             flashcardTitle={title ?? ''}
-            onGoToScreenB={() => setStep('screenB')}
+            onGoToSelection={() => setStep('selection')}
           />
         )}
         {step === 'screenB' && (
@@ -156,18 +165,16 @@ export const WordRegistration: React.FC = () => {
             targetWordMeaning={targetWordMeaning}
             freeText={freeText}
             setFreeText={setFreeText}
-            onSimilarWord={() => setStep('screenC')}
-            onOther={() => setStep('screenD')}
-            onMnemonic={() => setStep('screenE')}
-            onBack={backToInput}
-            onGoToScreenA={() => setStep('screenA')}
+            onSave={handleSaveToSheet}
+            isSaving={isSaving}
+            onBack={() => setStep('selection')}
           />
         )}
         {step === 'screenC' && (
           <ScreenC word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
         {step === 'screenD' && (
-          <ScreenD word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
+          <ScreenD word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('selection')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
         {step === 'screenE' && (
           <ScreenE word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
@@ -201,7 +208,7 @@ const InputStep: React.FC<{
         type="text"
         className="custom-input"
         value={word}
-        onChange={e => setWord(e.target.value)}
+        onChange={e => setWord(e.target.value.replace(/[^a-zA-Z]/g, ''))}
         onKeyDown={onKeyDown}
         placeholder="例: company, precede, transport ..."
         style={{ padding: '16px 52px 16px 20px', fontSize: '1.2rem', letterSpacing: '0.05em' }}
@@ -260,6 +267,120 @@ const JudgingStep: React.FC = () => (
 );
 
 // ══════════════════════════════════════════════════════════════
+// 選択画面 (語源リストに合致しなかった場合)
+// ══════════════════════════════════════════════════════════════
+const SelectionStep: React.FC<{
+  word: string;
+  targetWordMeaning: string;
+  onSelectFakeEtymology: () => void;
+  onSelectStory: () => void;
+  onBack: () => void;
+}> = ({ word, targetWordMeaning, onSelectFakeEtymology, onSelectStory, onBack }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div
+      style={{
+        padding: '6px 14px',
+        background: 'rgba(234,179,8,0.15)',
+        border: '1px solid rgba(234,179,8,0.4)',
+        borderRadius: '999px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        width: 'fit-content',
+        color: '#eab308',
+        fontSize: '0.85rem',
+        fontWeight: 600,
+        margin: '0 auto',
+      }}
+    >
+      💡 語源リストに一致しませんでした
+    </div>
+
+    <div style={{ textAlign: 'center', margin: '16px 0' }}>
+      <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
+        {word}
+      </h3>
+      {targetWordMeaning && (
+        <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          {targetWordMeaning}
+        </p>
+      )}
+    </div>
+
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
+      <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: '0 0 8px 0' }}>
+        暗記方法を選択してください
+      </h4>
+
+      <div style={{ display: 'flex', gap: '16px' }}>
+        <button
+          onClick={onSelectFakeEtymology}
+          style={{
+            flex: 1,
+            padding: '24px',
+            background: 'rgba(99,102,241,0.1)',
+            border: '1px solid rgba(99,102,241,0.3)',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(99,102,241,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(99,102,241,0.1)'}
+        >
+          <div style={{ fontSize: '2rem' }}>🧩</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#818cf8' }}>偽語源で覚える</div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>単語を分解して独自の語源を作成</div>
+        </button>
+
+        <button
+          onClick={onSelectStory}
+          style={{
+            flex: 1,
+            padding: '24px',
+            background: 'rgba(14,165,233,0.1)',
+            border: '1px solid rgba(14,165,233,0.3)',
+            borderRadius: '12px',
+            cursor: 'pointer',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: '12px',
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(14,165,233,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,165,233,0.1)'}
+        >
+          <div style={{ fontSize: '2rem' }}>📖</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#38bdf8' }}>ストーリーで覚える</div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>関連するストーリーやイメージを作成</div>
+        </button>
+      </div>
+    </div>
+
+    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+      <button
+        onClick={onBack}
+        style={{
+          padding: '12px 24px',
+          background: 'rgba(255,255,255,0.05)',
+          border: '1px solid var(--panel-border)',
+          borderRadius: '10px',
+          cursor: 'pointer',
+          color: 'var(--text-primary)',
+          display: 'flex', alignItems: 'center', gap: '8px',
+        }}
+      >
+        <ArrowLeft size={16} /> 別の単語を入力する
+      </button>
+    </div>
+  </div>
+);
+
+// ══════════════════════════════════════════════════════════════
 // 画面 A: 語源で暗記
 // ══════════════════════════════════════════════════════════════
 const ScreenA: React.FC<{
@@ -272,27 +393,41 @@ const ScreenA: React.FC<{
   onSave: (rowData: string[]) => void;
   isSaving: boolean;
   flashcardTitle: string;
-  onGoToScreenB: () => void;
-}> = ({ word, targetWordMeaning, integratedMeaning, etymologyInfo, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToScreenB }) => {
-  const [relatedWordIndices, setRelatedWordIndices] = useState<Record<number, number>>({});
+  onGoToSelection: () => void;
+}> = ({ word, targetWordMeaning, integratedMeaning, etymologyInfo, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToSelection }) => {
+  const [selectedPartIndex, setSelectedPartIndex] = useState<number | null>(null);
 
-  const handleRefreshRelatedWord = (partIndex: number, maxWords: number) => {
-    setRelatedWordIndices((prev) => {
-      const currentIndex = prev[partIndex] || 0;
-      return {
-        ...prev,
-        [partIndex]: (currentIndex + 1) % maxWords,
-      };
-    });
+  const openModal = (partIndex: number) => {
+    setSelectedPartIndex(partIndex);
+  };
+
+  const closeModal = () => {
+    setSelectedPartIndex(null);
   };
 
   const handleSaveClick = () => {
     const rowData: string[] = ['0', word, targetWordMeaning];
-    etymologyParts.forEach((part, idx) => {
-      const selectedRelatedWord = part.relatedWords?.[relatedWordIndices[idx] || 0];
+    
+    // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
+    const partsToSave = etymologyParts.slice(0, 4);
+    partsToSave.forEach((part) => {
       rowData.push(part.part);
-      rowData.push(selectedRelatedWord ? `${selectedRelatedWord.word} (${selectedRelatedWord.meaning})` : '');
+      rowData.push(part.meaning);
     });
+    
+    // K列まで空文字で埋める
+    while (rowData.length < 11) {
+      rowData.push('');
+    }
+
+    // L列以降 (インデックス11〜) に統合イメージを分割して入れる
+    if (integratedMeaning) {
+      const steps = integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
+      steps.forEach(step => {
+        rowData.push(step);
+      });
+    }
+
     onSave(rowData);
   };
 
@@ -332,9 +467,14 @@ const ScreenA: React.FC<{
       {/* 語源の分解と意味 */}
       {etymologyParts && etymologyParts.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
-          <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', marginBottom: '8px' }}>
-            語源で分解
-          </h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
+              語源で分解
+            </h4>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', margin: 0, opacity: 0.7 }}>
+              💡 語源部分をタップすると関連単語が表示されます
+            </p>
+          </div>
 
           <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
             {etymologyParts.map((part, idx) => (
@@ -346,17 +486,29 @@ const ScreenA: React.FC<{
                   gap: '8px',
                   width: '200px'
                 }}>
-                  {/* パーツ */}
-                  <div style={{
-                    background: 'rgba(16,185,129,0.15)',
-                    color: '#10b981',
-                    padding: '8px 16px',
-                    borderRadius: '8px',
-                    fontWeight: 700,
-                    fontSize: '1.4rem',
-                    textAlign: 'center',
-                    width: '100%'
-                  }}>
+                  {/* パーツ - タップでモーダルを開く */}
+                  <div
+                    onClick={() => openModal(idx)}
+                    style={{
+                      background: 'rgba(16,185,129,0.15)',
+                      color: '#10b981',
+                      padding: '8px 16px',
+                      borderRadius: '8px',
+                      fontWeight: 700,
+                      fontSize: '1.4rem',
+                      textAlign: 'center',
+                      width: '100%',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      border: '2px solid transparent',
+                    }}
+                    onMouseEnter={e => {
+                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(16,185,129,0.25)';
+                    }}
+                    onMouseLeave={e => {
+                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(16,185,129,0.15)';
+                    }}
+                  >
                     {part.part}
                   </div>
 
@@ -368,49 +520,6 @@ const ScreenA: React.FC<{
                   {/* 意味 */}
                   <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
                     {part.meaning}
-                  </div>
-
-                  {/* 関連語 */}
-                  <div style={{
-                    marginTop: '8px',
-                    padding: '12px',
-                    background: 'rgba(15, 23, 42, 0.4)',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    width: '100%'
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>同じ語源の単語</p>
-                      {part.relatedWords && part.relatedWords.length > 1 && (
-                        <button
-                          onClick={() => handleRefreshRelatedWord(idx, part.relatedWords.length)}
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-secondary)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '2px',
-                            padding: '2px 4px',
-                            borderRadius: '4px',
-                          }}
-                        >
-                          <RefreshCcw size={12} />
-                        </button>
-                      )}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
-                      <span style={{ fontSize: '1.1rem', fontWeight: 600, color: '#60a5fa' }}>
-                        {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.word}
-                      </span>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
-                        {part.relatedWords && part.relatedWords[relatedWordIndices[idx] || 0]?.meaning}
-                      </span>
-                    </div>
                   </div>
                 </div>
                 {idx < etymologyParts.length - 1 && (
@@ -478,7 +587,7 @@ const ScreenA: React.FC<{
       {/* 別の方法で暗記するボタン */}
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
         <button
-          onClick={onGoToScreenB}
+          onClick={onGoToSelection}
           style={{
             background: 'transparent',
             border: '1px solid var(--accent-color)',
@@ -548,121 +657,284 @@ const ScreenA: React.FC<{
           <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
         </button>
       </div>
+
+      {/* モーダル：関連単語を表示 */}
+      {selectedPartIndex !== null && etymologyParts[selectedPartIndex] && (
+        <div
+          onClick={closeModal}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.95)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            padding: '20px',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--panel-bg)',
+              border: '1px solid var(--panel-border)',
+              borderRadius: '16px',
+              padding: '32px',
+              maxWidth: '600px',
+              width: '100%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              position: 'relative',
+            }}
+          >
+            {/* 閉じるボタン */}
+            <button
+              onClick={closeModal}
+              style={{
+                position: 'absolute',
+                top: '16px',
+                right: '16px',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
+                fontSize: '1.5rem',
+                padding: '4px 8px',
+              }}
+            >
+              ✕
+            </button>
+
+            {/* 語源パーツ名 */}
+            <h3 style={{
+              fontSize: '2rem',
+              fontWeight: 700,
+              color: '#10b981',
+              textAlign: 'center',
+              marginBottom: '8px',
+            }}>
+              {etymologyParts[selectedPartIndex].part}
+            </h3>
+
+            {/* 意味 */}
+            <p style={{
+              fontSize: '1.1rem',
+              color: 'var(--text-secondary)',
+              textAlign: 'center',
+              marginBottom: '24px',
+            }}>
+              意味：{etymologyParts[selectedPartIndex].meaning}
+            </p>
+
+            {/* 関連単語リスト */}
+            <h4 style={{
+              fontSize: '1rem',
+              color: 'var(--text-secondary)',
+              marginBottom: '16px',
+              textAlign: 'center',
+            }}>
+              同じ語源を持つ英単語
+            </h4>
+
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px',
+            }}>
+              {etymologyParts[selectedPartIndex].relatedWords?.map((relatedWord, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    padding: '16px',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    border: '1px solid rgba(16, 185, 129, 0.2)',
+                    borderRadius: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                  }}
+                >
+                  {/* 単語名 */}
+                  <span style={{
+                    fontSize: '1.3rem',
+                    fontWeight: 700,
+                    color: '#60a5fa',
+                  }}>
+                    {relatedWord.word}
+                  </span>
+
+                  {/* 意味 */}
+                  <span style={{
+                    fontSize: '1rem',
+                    color: 'var(--text-primary)',
+                  }}>
+                    {relatedWord.meaning}
+                  </span>
+
+                  {/* 語源分解 */}
+                  {relatedWord.breakdown && (
+                    <div style={{
+                      marginTop: '8px',
+                      padding: '8px 12px',
+                      background: 'rgba(16, 185, 129, 0.15)',
+                      borderRadius: '8px',
+                      fontSize: '0.9rem',
+                      color: '#10b981',
+                      fontWeight: 600,
+                    }}>
+                      {relatedWord.breakdown}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // ══════════════════════════════════════════════════════════════
-// 画面 B: 自由連想入力
+// 画面 B: 自由連想入力（複数入力欄対応）
 // ══════════════════════════════════════════════════════════════
 const ScreenB: React.FC<{
   word: string;
   targetWordMeaning: string;
   freeText: string;
   setFreeText: (v: string) => void;
-  onSimilarWord: () => void;
-  onOther: () => void;
-  onMnemonic: () => void;
+  onSave: (rowData: string[]) => void;
+  isSaving: boolean;
   onBack: () => void;
-  onGoToScreenA?: () => void;
-}> = ({ word, targetWordMeaning, freeText, setFreeText, onSimilarWord, onOther, onMnemonic, onBack, onGoToScreenA }) => {
-  const [selection, setSelection] = useState<'similar' | 'other' | 'mnemonic' | null>(null);
+}> = ({ word, targetWordMeaning, freeText: _freeText, setFreeText: _setFreeText, onSave, isSaving, onBack }) => {
+  const [aiModalStep, setAiModalStep] = useState<1 | 2 | 3>(1);
+  const [aiModalResult, setAiModalResult] = useState<{ explanation: string; integratedMeaning: string; parts: { part: string; meaning: string }[] } | null>(null);
+  const [isAIProcessing, setIsAIProcessing] = useState(false);
+  const [splitPoints, setSplitPoints] = useState<boolean[]>(new Array(word.length - 1).fill(false));
+  const [aiModalPartInputs, setAiModalPartInputs] = useState<string[]>([]);
+  const [aiModalIntent, setAiModalIntent] = useState<string>('');
+  const [isDraftingIntent, setIsDraftingIntent] = useState(false);
 
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [suggestionIndex, setSuggestionIndex] = useState(0);
-  const [isSuggesting, setIsSuggesting] = useState(false);
+  // Update text when freeText changes
+  useEffect(() => {
+    // Removed sync logic so it does not clear out aiModalResult
+  }, [_freeText]);
 
-  const [otherSuggestions, setOtherSuggestions] = useState<string[]>([]);
-  const [otherSuggestionIndex, setOtherSuggestionIndex] = useState(0);
-  const [isSuggestingOther, setIsSuggestingOther] = useState(false);
+  const getWordParts = () => {
+    const parts: string[] = [];
+    let currentPart = '';
+    for (let i = 0; i < word.length; i++) {
+      currentPart += word[i];
+      if (i < word.length - 1 && splitPoints[i]) {
+        parts.push(currentPart);
+        currentPart = '';
+      }
+    }
+    parts.push(currentPart);
+    return parts;
+  };
 
-  const [mnemonicSuggestions, setMnemonicSuggestions] = useState<string[]>([]);
-  const [mnemonicSuggestionIndex, setMnemonicSuggestionIndex] = useState(0);
-  const [isSuggestingMnemonic, setIsSuggestingMnemonic] = useState(false);
+  const handleNextStep = () => {
+    const parts = getWordParts();
+    setAiModalPartInputs(new Array(parts.length).fill(''));
+    setAiModalIntent('');
+    setAiModalStep(2);
+  };
 
-  const handleSuggest = async (forceFetch: boolean = false) => {
-    // もしすでに提案があり、かつ強制再フェッチでなければ次へサイクルする
-    if (!forceFetch && suggestions.length > 0) {
-      const nextIndex = (suggestionIndex + 1) % suggestions.length;
-      setSuggestionIndex(nextIndex);
-      setFreeText(suggestions[nextIndex]);
+  const toggleSplit = (index: number) => {
+    setSplitPoints(prev => {
+      const newPoints = [...prev];
+      newPoints[index] = !newPoints[index];
+      return newPoints;
+    });
+  };
+
+  const handleAIConnect = async () => {
+    const isAnyFilled = aiModalPartInputs.some(input => input.trim());
+    if (!isAnyFilled) {
+      alert('少なくとも1つのパーツに連想を入力してください。');
       return;
     }
 
-    setIsSuggesting(true);
+    setIsAIProcessing(true);
+
+    const parts = getWordParts();
+    // const splittedWord = parts.join(' / '); // Commenting this out to avoid confusion
+
+    const associationStr = parts.map((p, i) => {
+      const val = aiModalPartInputs[i].trim();
+      return val ? `${p}(${val})` : p;
+    }).join(' ＋ ');
+
     try {
-      const res = await suggestSimilarWords(word);
-      if (res && res.length > 0) {
-        setSuggestions(res);
-        setSuggestionIndex(0);
-        setFreeText(res[0]);
-      } else {
-        alert('似た単語の提案を取得できませんでした。');
-      }
+      const result = await generateCustomFakeEtymology(word, targetWordMeaning, parts, associationStr, aiModalIntent);
+      setAiModalResult({ explanation: result, integratedMeaning: '', parts: [] });
+      setAiModalStep(3); // Go to display step
     } catch (err: any) {
       console.error(err);
       alert(`エラーが発生しました: ${err.message || err}`);
     } finally {
-      setIsSuggesting(false);
+      setIsAIProcessing(false);
     }
   };
 
-  const handleSuggestOther = async (forceFetch: boolean = false) => {
-    if (!forceFetch && otherSuggestions.length > 0) {
-      const nextIndex = (otherSuggestionIndex + 1) % otherSuggestions.length;
-      setOtherSuggestionIndex(nextIndex);
-      setFreeText(otherSuggestions[nextIndex]);
+  const handleDraftIntent = async () => {
+    const isAnyFilled = aiModalPartInputs.some(input => input.trim());
+    if (!isAnyFilled) {
+      alert('少なくとも1つのパーツに連想を入力してください。');
       return;
     }
 
-    setIsSuggestingOther(true);
+    setIsDraftingIntent(true);
+    const parts = getWordParts();
+    // const splittedWord = parts.join(' / ');
+    const associationStr = parts.map((p, i) => {
+      const val = aiModalPartInputs[i].trim();
+      return val ? `${p}(${val})` : p;
+    }).join(' ＋ ');
+
     try {
-      const res = await suggestOtherAssociations(word);
-      if (res && res.length > 0) {
-        setOtherSuggestions(res);
-        setOtherSuggestionIndex(0);
-        setFreeText(res[0]);
-      } else {
-        alert('連想の提案を取得できませんでした。');
-      }
+      const draft = await draftUserIntent(word, targetWordMeaning, parts, associationStr);
+      setAiModalIntent(draft);
     } catch (err: any) {
       console.error(err);
-      alert(`エラーが発生しました: ${err.message || err}`);
+      alert('意図・背景の生成に失敗しました');
     } finally {
-      setIsSuggestingOther(false);
+      setIsDraftingIntent(false);
     }
   };
 
-  const handleSuggestMnemonic = async (forceFetch: boolean = false) => {
-    if (!forceFetch && mnemonicSuggestions.length > 0) {
-      const nextIndex = (mnemonicSuggestionIndex + 1) % mnemonicSuggestions.length;
-      setMnemonicSuggestionIndex(nextIndex);
-      setFreeText(mnemonicSuggestions[nextIndex]);
+  const handleSaveClick = () => {
+    if (!aiModalResult) {
+      alert('連想内容を生成してください。');
       return;
     }
-
-    setIsSuggestingMnemonic(true);
-    try {
-      const res = await suggestMnemonic(word, targetWordMeaning);
-      if (res && res.length > 0) {
-        setMnemonicSuggestions(res);
-        setMnemonicSuggestionIndex(0);
-        setFreeText(res[0]);
-      } else {
-        alert('語呂合わせの提案を取得できませんでした。');
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert(`エラーが発生しました: ${err.message || err}`);
-    } finally {
-      setIsSuggestingMnemonic(false);
+    const rowData: string[] = ['0', word, targetWordMeaning];
+    
+    // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
+    const partsToSave = aiModalResult.parts.slice(0, 4);
+    partsToSave.forEach(p => {
+      rowData.push(p.part);
+      rowData.push(p.meaning);
+    });
+    
+    // K列まで空文字で埋める
+    while (rowData.length < 11) {
+      rowData.push('');
     }
-  };
 
-  const handleNext = () => {
-    if (selection === 'similar') onSimilarWord();
-    else if (selection === 'other') onOther();
-    else if (selection === 'mnemonic') onMnemonic();
+    // L列以降 (インデックス11〜) に統合イメージを分割して入れる
+    if (aiModalResult.integratedMeaning) {
+      const steps = aiModalResult.integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
+      steps.forEach(step => {
+        rowData.push(step);
+      });
+    }
+
+    onSave(rowData);
   };
 
   return (
@@ -682,7 +954,7 @@ const ScreenB: React.FC<{
           fontWeight: 600,
         }}
       >
-        <Lightbulb size={14} /> 自由連想モード
+        <Sparkles size={14} /> お助けAI（自由連想）
       </div>
 
       {/* 単語表示 */}
@@ -696,36 +968,6 @@ const ScreenB: React.FC<{
           position: 'relative',
         }}
       >
-        {onGoToScreenA && (
-          <button
-            onClick={onGoToScreenA}
-            style={{
-              position: 'absolute',
-              top: '16px',
-              right: '16px',
-              background: 'transparent',
-              border: '1px solid #10b981',
-              color: '#10b981',
-              borderRadius: '999px',
-              padding: '6px 16px',
-              fontSize: '0.85rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
-            onMouseEnter={e => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'rgba(16, 185, 129, 0.1)';
-            }}
-            onMouseLeave={e => {
-              (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-            }}
-          >
-            語源で覚える <ArrowRight size={14} />
-          </button>
-        )}
         <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>{word}</h3>
         {targetWordMeaning && (
           <p style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -734,297 +976,406 @@ const ScreenB: React.FC<{
         )}
       </div>
 
-      {/* 分岐ボタン */}
-      <div>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '14px', textAlign: 'center' }}>
-          まず、どちらのアプローチで暗記するか選択してください
-        </p>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '14px' }}>
-          <ChoiceCard
-            id="btn-similar-word"
-            icon="🔤"
-            title="似た英単語"
-            desc="似た英単語を思い浮かべた"
-            color="#6366f1"
-            onClick={() => {
-              setSelection('similar');
-              if (suggestions.length > 0) setFreeText(suggestions[suggestionIndex]);
-            }}
-            selected={selection === 'similar'}
-          />
-          <ChoiceCard
-            id="btn-other"
-            icon="💭"
-            title="似たカタカナ語"
-            desc="カタカナ語を思い浮かべた"
-            color="#0ea5e9"
-            onClick={() => {
-              setSelection('other');
-              if (otherSuggestions.length > 0) setFreeText(otherSuggestions[otherSuggestionIndex]);
-            }}
-            selected={selection === 'other'}
-          />
-          <ChoiceCard
-            id="btn-mnemonic"
-            icon="🤣"
-            title="語呂合わせ"
-            desc="語呂合わせで覚える"
-            color="#f59e0b"
-            onClick={() => {
-              setSelection('mnemonic');
-              if (mnemonicSuggestions.length > 0) setFreeText(mnemonicSuggestions[mnemonicSuggestionIndex]);
-            }}
-            selected={selection === 'mnemonic'}
-          />
-        </div>
-      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {aiModalStep === 1 && (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', margin: '8px 0 16px 0' }}>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>単語を分解して連想しやすくします</p>
+              <div style={{ display: 'flex', alignItems: 'center', fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+                {word.split('').map((char, index) => (
+                  <React.Fragment key={index}>
+                    <span>{char}</span>
+                    {index < word.length - 1 && (
+                      <div
+                        onClick={() => toggleSplit(index)}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'flex-end',
+                          cursor: 'pointer',
+                          padding: '0 2px',
+                          height: '100%',
+                          position: 'relative'
+                        }}
+                        title="ここで区切る"
+                      >
+                        <div style={{
+                          position: 'absolute',
+                          top: '-16px',
+                          color: 'var(--accent-color)',
+                          fontSize: '1.2rem',
+                          opacity: splitPoints[index] ? 1 : 0.3,
+                          transition: 'opacity 0.2s',
+                        }}
+                          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                          onMouseLeave={e => e.currentTarget.style.opacity = splitPoints[index] ? '1' : '0.3'}
+                        >
+                          ▼
+                        </div>
+                        <span style={{
+                          color: splitPoints[index] ? 'var(--accent-color)' : 'transparent',
+                          transition: 'color 0.2s',
+                          fontSize: '2.5rem',
+                          fontWeight: 300,
+                          margin: '0 4px'
+                        }}>
+                          /
+                        </span>
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                💡 ▼を押して単語を区切ってください
+              </p>
+            </div>
 
-      {/* 自由入力 */}
-      <div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-          {selection === 'similar' && (
-            <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={handleNextStep}
+              style={{
+                padding: '16px',
+                background: 'var(--primary-color)',
+                border: 'none',
+                borderRadius: '8px',
+                color: 'white',
+                fontWeight: 600,
+                fontSize: '1.1rem',
+                cursor: 'pointer',
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s',
+                marginTop: '8px'
+              }}
+            >
+              次へ <ArrowRight size={18} />
+            </button>
+            <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
               <button
-                onClick={() => handleSuggest(false)}
-                disabled={isSuggesting}
+                onClick={onBack}
                 style={{
-                  background: 'rgba(99,102,241,0.2)',
-                  border: '1px solid rgba(99,102,241,0.4)',
-                  borderRadius: '8px',
-                  padding: '6px 12px',
-                  color: '#818cf8',
-                  fontSize: '0.8rem',
-                  cursor: isSuggesting ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  transition: 'background 0.2s',
+                  flex: 1,
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  color: 'var(--text-primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 }}
               >
-                <Sparkles size={14} />
-                {isSuggesting ? '提案中...' : suggestions.length > 0 ? '次の提案を見る' : '似た単語を提案'}
+                <ArrowLeft size={16} color="currentColor" /> 戻る
               </button>
-              {suggestions.length > 0 && (
-                <button
-                  onClick={() => handleSuggest(true)}
-                  disabled={isSuggesting}
-                  title="新しい提案をAIに考えさせる"
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(99,102,241,0.4)',
-                    borderRadius: '8px',
-                    padding: '6px 10px',
-                    color: '#818cf8',
-                    fontSize: '0.8rem',
-                    cursor: isSuggesting ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <RefreshCcw size={14} />
-                  再生成
-                </button>
-              )}
             </div>
-          )}
-          {selection === 'other' && (
-            <div style={{ display: 'flex', gap: '8px' }}>
+          </>
+        )}
+
+        {aiModalStep === 2 && (
+          <>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', margin: '8px 0 16px 0' }}>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>それぞれのパーツから連想することを入力してください</p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', marginTop: '12px', width: '100%' }}>
+                {getWordParts().map((part, idx) => (
+                  <React.Fragment key={idx}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', width: '100%' }}>
+                      <span style={{ fontSize: '2.5rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.05em' }}>{part}</span>
+                      <textarea
+                        className="custom-input"
+                        value={aiModalPartInputs[idx] || ''}
+                        onChange={(e) => {
+                          const newInputs = [...aiModalPartInputs];
+                          newInputs[idx] = e.target.value;
+                          setAiModalPartInputs(newInputs);
+                        }}
+                        placeholder={`${part} から連想すること...`}
+                        rows={(aiModalPartInputs[idx] || '').split('\n').length || 1}
+                        style={{ width: '100%', maxWidth: '500px', padding: '14px', fontSize: '1.2rem', textAlign: 'center', resize: 'vertical', lineHeight: '1.5' }}
+                      />
+                    </div>
+                    {idx < getWordParts().length - 1 && (
+                      <div style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>+</div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              <div style={{ marginTop: '24px', width: '100%', maxWidth: '500px' }}>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '8px', textAlign: 'center' }}>
+                  （任意）連想した意図や背景があれば自由に書いてください
+                </p>
+                <textarea
+                  className="custom-input"
+                  value={aiModalIntent}
+                  onChange={(e) => setAiModalIntent(e.target.value)}
+                  placeholder="例：主人公が冒険に出るファンタジーのような世界観で..."
+                  rows={3}
+                  style={{ width: '100%', padding: '14px', fontSize: '1rem', resize: 'vertical', lineHeight: '1.5' }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
+                  <button
+                    onClick={handleDraftIntent}
+                    disabled={isDraftingIntent || !aiModalPartInputs.some(input => input.trim())}
+                    style={{
+                      background: 'rgba(99,102,241,0.1)',
+                      border: '1px solid rgba(99,102,241,0.3)',
+                      color: '#818cf8',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      cursor: (isDraftingIntent || !aiModalPartInputs.some(input => input.trim())) ? 'not-allowed' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s',
+                      opacity: (isDraftingIntent || !aiModalPartInputs.some(input => input.trim())) ? 0.6 : 1
+                    }}
+                    onMouseEnter={e => { if (!isDraftingIntent && aiModalPartInputs.some(input => input.trim())) e.currentTarget.style.background = 'rgba(99,102,241,0.2)'; }}
+                    onMouseLeave={e => { if (!isDraftingIntent) e.currentTarget.style.background = 'rgba(99,102,241,0.1)'; }}
+                  >
+                    {isDraftingIntent ? (
+                      <><RefreshCcw size={14} className="spin-animation" /> 考えています...</>
+                    ) : (
+                      <><Sparkles size={14} /> AIに背景ストーリーを考えてもらう</>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
               <button
-                onClick={() => handleSuggestOther(false)}
-                disabled={isSuggestingOther}
+                onClick={() => setAiModalStep(1)}
                 style={{
-                  background: 'rgba(14,165,233,0.2)',
-                  border: '1px solid rgba(14,165,233,0.4)',
+                  flex: 1,
+                  padding: '16px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--panel-border)',
                   borderRadius: '8px',
-                  padding: '6px 12px',
-                  color: '#38bdf8',
-                  fontSize: '0.8rem',
-                  cursor: isSuggestingOther ? 'not-allowed' : 'pointer',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  cursor: 'pointer',
                   display: 'flex',
+                  justifyContent: 'center',
                   alignItems: 'center',
-                  gap: '4px',
-                  transition: 'background 0.2s',
+                  gap: '8px',
                 }}
               >
-                <Sparkles size={14} />
-                {isSuggestingOther ? '提案中...' : otherSuggestions.length > 0 ? '別の連想を見る' : '連想を提案'}
+                <ArrowLeft size={18} /> 戻る
               </button>
-              {otherSuggestions.length > 0 && (
-                <button
-                  onClick={() => handleSuggestOther(true)}
-                  disabled={isSuggestingOther}
-                  title="新しい連想をAIに考えさせる"
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(14,165,233,0.4)',
-                    borderRadius: '8px',
-                    padding: '6px 12px',
-                    color: '#38bdf8',
-                    fontSize: '0.8rem',
-                    cursor: isSuggestingOther ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <RefreshCcw size={14} />
-                  再生成
-                </button>
-              )}
-            </div>
-          )}
-          {selection === 'mnemonic' && (
-            <div style={{ display: 'flex', gap: '8px' }}>
               <button
-                onClick={() => handleSuggestMnemonic(false)}
-                disabled={isSuggestingMnemonic}
+                onClick={handleAIConnect}
+                disabled={isAIProcessing || !aiModalPartInputs.some(input => input.trim())}
                 style={{
-                  background: 'rgba(245,158,11,0.2)',
-                  border: '1px solid rgba(245,158,11,0.4)',
+                  flex: 2,
+                  padding: '16px',
+                  background: isAIProcessing || !aiModalPartInputs.some(input => input.trim()) ? 'rgba(99,102,241,0.3)' : 'var(--primary-color)',
+                  border: 'none',
                   borderRadius: '8px',
-                  padding: '6px 12px',
-                  color: '#fbbf24',
-                  fontSize: '0.8rem',
-                  cursor: isSuggestingMnemonic ? 'not-allowed' : 'pointer',
+                  color: 'white',
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  cursor: isAIProcessing || !aiModalPartInputs.some(input => input.trim()) ? 'not-allowed' : 'pointer',
                   display: 'flex',
+                  justifyContent: 'center',
                   alignItems: 'center',
-                  gap: '4px',
-                  transition: 'background 0.2s',
+                  gap: '8px',
                 }}
               >
-                <Sparkles size={14} />
-                {isSuggestingMnemonic ? '提案中...' : mnemonicSuggestions.length > 0 ? '別の語呂合わせを見る' : '語呂合わせを提案'}
+                {isAIProcessing ? (
+                  <>
+                    <RefreshCcw size={18} className="spin-animation" />
+                    AIで結びつけています...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={18} />
+                    AIで結びつける
+                  </>
+                )}
               </button>
-              {mnemonicSuggestions.length > 0 && (
-                <button
-                  onClick={() => handleSuggestMnemonic(true)}
-                  disabled={isSuggestingMnemonic}
-                  title="新しい語呂合わせをAIに考えさせる"
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(245,158,11,0.4)',
-                    borderRadius: '8px',
-                    padding: '6px 12px',
-                    color: '#fbbf24',
-                    fontSize: '0.8rem',
-                    cursor: isSuggestingMnemonic ? 'not-allowed' : 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  <RefreshCcw size={14} />
-                  再生成
-                </button>
-              )}
             </div>
-          )}
-        </div>
-        <textarea
-          id="free-text-input"
-          className="custom-input"
-          value={freeText}
-          onChange={e => {
-            setFreeText(e.target.value);
-            // ユーザーが手動編集したら提案のサイクルをリセット
-            if (selection === 'similar' && suggestions.length > 0 && e.target.value !== suggestions[suggestionIndex]) {
-              setSuggestions([]);
-            }
-            if (selection === 'other' && otherSuggestions.length > 0 && e.target.value !== otherSuggestions[otherSuggestionIndex]) {
-              setOtherSuggestions([]);
-            }
-            if (selection === 'mnemonic' && mnemonicSuggestions.length > 0 && e.target.value !== mnemonicSuggestions[mnemonicSuggestionIndex]) {
-              setMnemonicSuggestions([]);
-            }
-          }}
-          placeholder="似た単語、イメージ、語呂合わせ、エピソードなど何でもOK..."
-          rows={4}
-          style={{ resize: 'vertical', lineHeight: 1.7 }}
-        />
+          </>
+        )}
+
+        {aiModalStep === 3 && aiModalResult && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div
+              style={{
+                padding: '6px 14px',
+                background: 'rgba(99,102,241,0.15)',
+                border: '1px solid rgba(99,102,241,0.4)',
+                borderRadius: '999px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                width: 'fit-content',
+                color: '#818cf8',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                margin: '0 auto',
+              }}
+            >
+              ✅ あなた専用の語源（AI生成）
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
+                  自由連想から作成した語源
+                </h4>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                {aiModalResult.parts.map((part, idx) => (
+                  <React.Fragment key={idx}>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '8px',
+                      width: '200px'
+                    }}>
+                      <div
+                        style={{
+                          background: 'rgba(99,102,241,0.15)',
+                          color: '#818cf8',
+                          padding: '8px 16px',
+                          borderRadius: '8px',
+                          fontWeight: 700,
+                          fontSize: '1.4rem',
+                          textAlign: 'center',
+                          width: '100%',
+                          border: '2px solid transparent',
+                        }}
+                      >
+                        {part.part}
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <ArrowDown size={20} />
+                      </div>
+                      <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
+                        {part.meaning}
+                      </div>
+                    </div>
+                    {idx < aiModalResult.parts.length - 1 && (
+                      <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
+                        <Plus size={24} color="var(--text-secondary)" />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+
+              <div style={{
+                marginTop: '24px',
+                padding: '24px',
+                background: 'rgba(99,102,241,0.05)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                borderRadius: '16px',
+                textAlign: 'center',
+              }}>
+                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '20px', fontWeight: 600 }}>パーツの統合イメージ</p>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                  {aiModalResult.integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean).map((step, idx, arr) => (
+                    <React.Fragment key={idx}>
+                      <div style={{
+                        padding: '12px 24px',
+                        background: 'rgba(99,102,241,0.12)',
+                        border: '1px solid rgba(99,102,241,0.3)',
+                        borderRadius: '10px',
+                        fontSize: '1.2rem',
+                        fontWeight: 700,
+                        color: '#818cf8',
+                        letterSpacing: '0.05em',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                      }}>
+                        {step}
+                      </div>
+                      {idx < arr.length - 1 && (
+                        <div style={{ color: 'rgba(99,102,241,0.5)', padding: '6px 0' }}>
+                          <ArrowDown size={28} />
+                        </div>
+                      )}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div
+              style={{
+                padding: '28px',
+                background: 'rgba(99,102,241,0.06)',
+                border: '1px solid rgba(99,102,241,0.2)',
+                borderRadius: '16px',
+              }}
+            >
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '6px' }}>語源の解説</p>
+              <p style={{ fontSize: '1rem', lineHeight: 1.7 }}>{aiModalResult.explanation}</p>
+            </div>
+            
+            <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
+              <button
+                onClick={() => setAiModalStep(2)}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '8px',
+                  color: 'var(--text-primary)',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <ArrowLeft size={18} /> 再生成する
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ボタン群 */}
-      <div style={{ display: 'flex', gap: '12px' }}>
-        <button
-          onClick={onBack}
-          style={{
-            flex: 1,
-            padding: '12px',
-            background: 'rgba(255,255,255,0.05)',
-            border: '1px solid var(--panel-border)',
-            borderRadius: '10px',
-            cursor: 'pointer',
-            color: 'var(--text-primary)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-          }}
-        >
-          <ArrowLeft size={16} color="currentColor" /> 戻る
-        </button>
-        <button
-          className="btn-primary"
-          style={{ flex: 1 }}
-          onClick={handleNext}
-          disabled={!selection || !freeText.trim()}
-        >
-          次へ <ArrowRight size={16} />
-        </button>
-      </div>
+      {aiModalStep === 3 && (
+        <div style={{ display: 'flex', gap: '12px', marginTop: '12px' }}>
+          <button
+            onClick={onBack}
+            style={{
+              flex: 1,
+              padding: '12px',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--panel-border)',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              color: 'var(--text-primary)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            }}
+          >
+            <ArrowLeft size={16} color="currentColor" /> 戻る
+          </button>
+          <button
+            className="btn-primary"
+            style={{ flex: 1 }}
+            onClick={handleSaveClick}
+            disabled={isSaving || !aiModalResult}
+          >
+            {isSaving ? '保存中...' : '保存'} <Save size={16} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };
-
-const ChoiceCard: React.FC<{
-  id: string;
-  icon: string;
-  title: string;
-  desc: string;
-  color: string;
-  onClick: () => void;
-  selected: boolean;
-}> = ({ id, icon, title, desc, color, onClick, selected }) => (
-  <button
-    id={id}
-    onClick={onClick}
-    style={{
-      padding: '20px 16px',
-      background: selected ? `rgba(${hexToRgb(color)}, 0.2)` : `rgba(${hexToRgb(color)}, 0.05)`,
-      border: `2px solid ${selected ? color : 'rgba(255,255,255,0.08)'}`,
-      borderRadius: '14px',
-      cursor: 'pointer',
-      textAlign: 'center',
-      transition: 'all 0.25s ease',
-      color: 'var(--text-primary)',
-      position: 'relative',
-    }}
-    onMouseEnter={e => {
-      if (!selected) {
-        (e.currentTarget as HTMLButtonElement).style.background = `rgba(${hexToRgb(color)}, 0.1)`;
-        (e.currentTarget as HTMLButtonElement).style.borderColor = `rgba(${hexToRgb(color)}, 0.4)`;
-        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)';
-      }
-    }}
-    onMouseLeave={e => {
-      if (!selected) {
-        (e.currentTarget as HTMLButtonElement).style.background = `rgba(${hexToRgb(color)}, 0.05)`;
-        (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(255,255,255,0.08)';
-        (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)';
-      }
-    }}
-  >
-    {selected && (
-      <div style={{ position: 'absolute', top: '12px', right: '12px', color }}>
-        <CheckCircle size={20} />
-      </div>
-    )}
-    <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>{icon}</div>
-    <p style={{ fontWeight: 700, fontSize: '1rem', marginBottom: '4px' }}>{title}</p>
-    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>{desc}</p>
-  </button>
-);
 
 // ══════════════════════════════════════════════════════════════
 // 画面 C（仮）: 似た英単語から暗記
@@ -1193,69 +1544,52 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
 };
 
 // ══════════════════════════════════════════════════════════════
-// 画面 D（仮）: カタカナ語から暗記
+// 画面 D: ストーリーで覚える
 // ══════════════════════════════════════════════════════════════
 const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBack: () => void; onSave: (rowData: string[]) => void; isSaving: boolean; flashcardTitle: string }> = ({
   word,
   meaning,
-  freeText,
   onBack,
   onSave,
   isSaving,
-  flashcardTitle: _flashcardTitleD,
 }) => {
-  const [fakeRelationship, setFakeRelationship] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [imageText, setImageText] = useState<string>('');
+  const [explanations, setExplanations] = useState<string[]>(['']);
 
-  const fetchFakeRelationship = async () => {
-    setIsLoading(true);
-    try {
-      const result = await generateFakeRelationship(word, meaning, freeText);
-      setFakeRelationship(result);
-    } catch (err) {
-      console.error(err);
-      setFakeRelationship('関連性の生成に失敗しました。');
-    } finally {
-      setIsLoading(false);
-    }
+  const updateExplanation = (index: number, value: string) => {
+    const newExps = [...explanations];
+    newExps[index] = value;
+    setExplanations(newExps);
   };
 
-  useEffect(() => {
-    let isMounted = true;
-    const initFetch = async () => {
-      setIsLoading(true);
-      try {
-        const result = await generateFakeRelationship(word, meaning, freeText);
-        if (isMounted) setFakeRelationship(result);
-      } catch (err) {
-        console.error(err);
-        if (isMounted) setFakeRelationship('関連性の生成に失敗しました。');
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-    initFetch();
-    return () => { isMounted = false; };
-  }, [word, meaning, freeText]);
+  const addExplanation = () => {
+    setExplanations([...explanations, '']);
+  };
+
+  const removeExplanation = (index: number) => {
+    if (explanations.length <= 1) return;
+    const newExps = explanations.filter((_, i) => i !== index);
+    setExplanations(newExps);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <div
         style={{
           padding: '6px 14px',
-          background: `rgba(${hexToRgb('#0ea5e9')}, 0.15)`,
-          border: `1px solid rgba(${hexToRgb('#0ea5e9')}, 0.4)`,
+          background: `rgba(14,165,233,0.15)`,
+          border: `1px solid rgba(14,165,233,0.4)`,
           borderRadius: '999px',
           display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
           width: 'fit-content',
-          color: '#0ea5e9',
+          color: '#38bdf8',
           fontSize: '0.85rem',
           fontWeight: 600,
         }}
       >
-        💭 画面D：カタカナ語から暗記
+        📖 ストーリーで覚える
       </div>
 
       <div
@@ -1264,77 +1598,113 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
           background: 'rgba(255,255,255,0.03)',
           border: '1px solid var(--panel-border)',
           borderRadius: '16px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px',
+          textAlign: 'center',
         }}
       >
+        <h3 style={{ fontSize: '2.4rem', fontWeight: 700, letterSpacing: '0.08em', marginBottom: '4px' }}>{word}</h3>
+        {meaning && (
+          <p style={{ fontSize: '1.2rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {meaning}
+          </p>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>暗記単語</p>
-          <p style={{ fontSize: '2rem', fontWeight: 700, letterSpacing: '0.05em' }}>{word}</p>
-          <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>{meaning}</p>
+          <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+            対象単語から連想するイメージ
+          </label>
+          <input
+            className="custom-input"
+            value={imageText}
+            onChange={(e) => setImageText(e.target.value)}
+            placeholder="例：リンゴが木から落ちる様子、宇宙船が発進する場面 など"
+            style={{ width: '100%', padding: '14px', fontSize: '1.1rem' }}
+          />
         </div>
+
         <div>
-          <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>選んだカタカナ語</p>
-          <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>{freeText}</p>
-        </div>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <p style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--text-primary)' }}>関連性</p>
+          <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+            イメージに関する説明やストーリー
+          </label>
+          {explanations.map((exp, idx) => (
+            <React.Fragment key={idx}>
+              <div style={{ position: 'relative' }}>
+                <textarea
+                  className="custom-input"
+                  value={exp}
+                  onChange={(e) => updateExplanation(idx, e.target.value)}
+                  placeholder="入力したイメージからどのように単語の意味につながるのか、詳細なストーリーを自由に書いてください。"
+                  rows={4}
+                  style={{ width: '100%', padding: '14px', fontSize: '1.1rem', resize: 'vertical', lineHeight: '1.6' }}
+                />
+                {explanations.length > 1 && (
+                  <button
+                    onClick={() => removeExplanation(idx)}
+                    style={{
+                      position: 'absolute',
+                      top: '10px',
+                      right: '10px',
+                      background: 'rgba(239,68,68,0.1)',
+                      border: 'none',
+                      borderRadius: '50%',
+                      width: '28px',
+                      height: '28px',
+                      color: '#ef4444',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s',
+                    }}
+                    title="この説明を削除"
+                    onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+              {idx < explanations.length - 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '8px 0', color: 'var(--text-secondary)' }}>
+                  <ArrowDown size={24} />
+                </div>
+              )}
+            </React.Fragment>
+          ))}
+
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
             <button
-              onClick={fetchFakeRelationship}
-              disabled={isLoading}
+              onClick={addExplanation}
               style={{
+                background: 'transparent',
+                border: '1px dashed var(--panel-border)',
+                borderRadius: '8px',
+                padding: '8px 24px',
+                color: 'var(--text-secondary)',
+                cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                padding: '4px 10px',
-                fontSize: '0.8rem',
-                color: isLoading ? 'var(--text-secondary)' : '#0ea5e9',
-                background: isLoading ? 'rgba(255,255,255,0.05)' : `rgba(${hexToRgb('#0ea5e9')}, 0.1)`,
-                border: `1px solid ${isLoading ? 'var(--panel-border)' : `rgba(${hexToRgb('#0ea5e9')}, 0.3)`}`,
-                borderRadius: '6px',
-                cursor: isLoading ? 'not-allowed' : 'pointer',
+                gap: '8px',
+                fontSize: '0.95rem',
                 transition: 'all 0.2s',
               }}
+              onMouseEnter={e => {
+                e.currentTarget.style.borderColor = 'var(--text-primary)';
+                e.currentTarget.style.color = 'var(--text-primary)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.borderColor = 'var(--panel-border)';
+                e.currentTarget.style.color = 'var(--text-secondary)';
+              }}
             >
-              <RefreshCcw size={12} className={isLoading ? 'spin-animation' : ''} />
-              {isLoading ? '生成中...' : '再生成'}
+              <Plus size={18} /> 説明を追加する
             </button>
           </div>
-          {isLoading ? (
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>関連性を生成中...</p>
-          ) : (
-            <textarea
-              value={fakeRelationship}
-              onChange={(e) => setFakeRelationship(e.target.value)}
-              style={{
-                width: '100%',
-                minHeight: '120px',
-                padding: '12px',
-                fontSize: '0.9rem',
-                color: 'var(--text-secondary)',
-                lineHeight: 1.6,
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid var(--panel-border)',
-                borderRadius: '8px',
-                resize: 'vertical',
-                outline: 'none',
-              }}
-              onFocus={(e) => {
-                e.target.style.borderColor = 'var(--primary-color)';
-                e.target.style.background = 'rgba(255,255,255,0.05)';
-              }}
-              onBlur={(e) => {
-                e.target.style.borderColor = 'var(--panel-border)';
-                e.target.style.background = 'rgba(255,255,255,0.02)';
-              }}
-            />
-          )}
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: '12px' }}>
+      <div style={{ display: 'flex', gap: '12px', marginTop: '8px' }}>
         <button
           onClick={onBack}
           style={{
@@ -1348,9 +1718,18 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
           }}
         >
-          <ArrowLeft size={16} color="currentColor" /> 連想入力に戻る
+          <ArrowLeft size={16} color="currentColor" /> 戻る
         </button>
-        <button id="screen-d-save-btn" className="btn-primary" style={{ flex: 1 }} onClick={() => onSave(['1', word, meaning, freeText, fakeRelationship])} disabled={isSaving}>
+        <button 
+          id="screen-d-save-btn" 
+          className="btn-primary" 
+          style={{ flex: 1 }} 
+          onClick={() => {
+            const rowData = ['1', word, meaning, imageText, ...explanations.filter(e => e.trim())];
+            onSave(rowData);
+          }} 
+          disabled={isSaving || !imageText.trim()}
+        >
           <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
         </button>
       </div>
@@ -1469,9 +1848,9 @@ const ScreenE: React.FC<{ word: string; meaning: string; freeText: string; onBac
             </button>
           </div>
           {isLoading ? (
-             <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>情景を生成中...</p>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>情景を生成中...</p>
           ) : (
-             <textarea
+            <textarea
               value={fakeStory}
               onChange={(e) => setFakeStory(e.target.value)}
               style={{

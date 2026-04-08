@@ -9,6 +9,7 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 export interface RelatedWord {
   word: string;
   meaning: string;
+  breakdown?: string;
 }
 
 export interface EtymologyPart {
@@ -678,6 +679,141 @@ export const suggestMnemonic = async (word: string, meaning: string): Promise<st
     return extractArrayFromResponse(rawText, 'mnemonics');
   } catch (err: any) {
     console.error('[SuggestMnemonic] Error:', err);
+    throw err;
+  }
+};
+
+/**
+ * ユーザーが入力した「語源の各パーツの意味や連想」をもとに、
+ * 全体を統合して「英単語の本来の意味」へと繋げる、論理的で客観的な解説文（辞書のようなトーン）を作成する。
+ * (Gemini API)
+ */
+export const draftUserIntent = async (
+  word: string,
+  targetWordMeaning: string,
+  splittedWord: string[],
+  association: string
+): Promise<string> => {
+  if (!GEMINI_API_KEY) {
+    console.warn('[DraftUserIntent] VITE_GEMINI_API_KEY is not set. Returning mock result.');
+    return `（モック）${splittedWord.join('と')}を組み合わせると、「${targetWordMeaning}」という本来の意味に繋がります。`;
+  }
+
+  const prompt = `
+あなたは英語辞書の編集者です。
+英単語「${word}」（意味：「${targetWordMeaning}」）について、学習者が各パーツから連想した内容をもとに、
+パーツの連想内容から「${targetWordMeaning}」という本来の意味へと至る、客観的で論理的な解説文を作成してください。
+
+【学習者の連想内容】
+${association}
+
+【ルール】
+- 学習者の連想内容を要素として必ず組み込んでください。
+- ファンタジーや魔法のような架空の設定（「〜という魔法」「〜という呪文」など）や物語調、比喩的な表現は一切排除してください。
+- 辞書や語源辞典に載っているような、事実を淡々と述べる客観的で論理的な文体（だ・である調、または一般的な解説文）で作成してください。
+- 2〜3文程度（100文字〜150文字）で簡潔にまとめ、必ず「〜」と文末を完全に終わらせてください。途中で絶対に切らないでください。
+- 挨拶、前置き、総括（「このように〜」「というわけです」など）は不要です。
+- 【重要】出力の途中で文章が切れることを防ぐため、必ず最後に「。」（句点）を付けて完全に文を終わらせてください。
+`.trim();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3, // より客観的な文章にするため少し低めに設定
+          maxOutputTokens: 4096, // 出力途切れ防止のために十分なトークン数を確保
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!rawText) throw new Error('Empty response');
+
+    return rawText.trim();
+  } catch (err: any) {
+    console.error('[DraftUserIntent] Error:', err);
+    throw err;
+  }
+};
+
+/**
+ * ユーザーのパーツ分割と連想（＋背景ストーリーの意図）から、架空の語源（意味の変遷）を生成する。
+ * (Gemini API)
+ */
+export const generateCustomFakeEtymology = async (
+  word: string,
+  targetWordMeaning: string,
+  splittedWord: string[],
+  association: string,
+  userIntent: string
+): Promise<string> => {
+  if (!GEMINI_API_KEY) {
+    return `（モック）${splittedWord.join('＋')} → ${targetWordMeaning}。背景: ${userIntent}`;
+  }
+
+  const prompt = `
+あなたは英語辞書の編集者です。
+英単語「${word}」（意味：「${targetWordMeaning}」）について、学習者が各パーツから連想した内容をもとに、
+パーツの連想内容から「${targetWordMeaning}」という本来の意味へと至る、客観的で論理的な解説文（語源解説のようなもの）を作成してください。
+
+【学習者の連想内容と背景ストーリー】
+・各パーツの連想: ${association}
+・背景（意図）: ${userIntent}
+
+【ルール】
+- 上記の連想と背景ストーリーを論理的に統合し、最終的に「${targetWordMeaning}」という本来の意味へどのように繋がるのかを辞書的なトーンで客観的に解説してください。
+- ファンタジーや魔法のような架空の設定（「〜という魔法」「〜という呪文」など）や物語調、比喩的な表現は一切排除してください。
+- 事実を淡々と述べる客観的で論理的な文体（だ・である調、または一般的な解説文）で作成してください。
+- 2〜3文程度（100文字〜150文字）で簡潔にまとめ、必ず「〜」と文末を完全に終わらせてください。途中で絶対に切らないでください。
+- 挨拶、前置き、総括（「このように〜」「というわけです」など）は不要です。
+- 【重要】出力の途中で文章が切れることを防ぐため、必ず最後に「。」（句点）を付けて完全に文を終わらせてください。
+- 最後に、各パーツの統合フレーズを「○○＋○○→○○」の形式で必ず含めてください。
+`.trim();
+
+  try {
+    const response = await fetch(GEMINI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 4096,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_NONE" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_NONE" }
+        ]
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
+    if (!rawText) throw new Error('Empty response');
+
+    return rawText.trim();
+  } catch (err: any) {
+    console.error('[GenerateCustomFakeEtymology] Error:', err);
     throw err;
   }
 };
