@@ -363,9 +363,33 @@ function handleGetFlashcard(payload) {
     // 空行はスキップ（B列の単語が存在しない場合）
     if (!data[i][1]) continue;
 
+    // 最新の保存形式:
+    // A列[0]: フラグ('0'など)
+    // B列[1]: 単語
+    // C列[2]〜J列[9]: 語源パーツと意味（最大4ペア）
+    // K列[10]以降: 意味の変化のステップ
+    // 最後の列: 対象単語の意味
+
+    // 対象単語の意味は、データが入っている最後の列にあるはず
+    var rowLen = data[i].length;
+    var targetMeaning = "";
+    // 空文字でない最後の要素を探す
+    for (var col = rowLen - 1; col >= 2; col--) {
+      if (data[i][col] !== "" && data[i][col] !== undefined) {
+        targetMeaning = data[i][col];
+        break;
+      }
+    }
+    
+    // 旧データ（C列に意味がある場合）へのフォールバック
+    if (!targetMeaning) {
+      targetMeaning = data[i][2] || '';
+    }
+
     var flashcard = {
       word: data[i][1] || '', // B列: 単語
-      meaning: data[i][2] || '' // C列: 意味
+      meaning: targetMeaning,
+      rawData: data[i] // UI側で語源パーツや意味の変化を表示できるように全データを渡す
     };
     
     flashcards.push(flashcard);

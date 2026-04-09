@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, ArrowRight, ArrowDown, Plus, RefreshCcw, Save } from 'lucide-react';
 import { getTestSheetEtymologies, addWordToFlashcard } from '../api/flashcard';
-import { checkEtymologyMatch, generateFakeEtymology, generateMnemonicStory, autoCompleteIntegration, type EtymologyPart } from '../api/wordRegistration';
+import { checkEtymologyMatch, generateFakeEtymology, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
 
 type Step = 'input' | 'judging' | 'selection' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
@@ -17,6 +17,7 @@ export const WordRegistration: React.FC = () => {
   const [targetWordMeaning, setTargetWordMeaning] = useState<string>('');
   const [integratedMeaning, setIntegratedMeaning] = useState<string>('');
   const [etymologyParts, setEtymologyParts] = useState<EtymologyPart[]>([]);
+  const [cameFromScreenA, setCameFromScreenA] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -49,6 +50,7 @@ export const WordRegistration: React.FC = () => {
       setTargetWordMeaning(matchResult.targetWordMeaning ?? '');
       setEtymologyParts(matchResult.parts ?? []);
       setIntegratedMeaning(matchResult.integratedMeaning ?? '');
+      setCameFromScreenA(false);
 
       if (matchResult.matched) {
         setStep('screenA');
@@ -70,6 +72,7 @@ export const WordRegistration: React.FC = () => {
     setStep('input');
     setFreeText('');
     setError(null);
+    setCameFromScreenA(false);
   };
 
   const handleSaveToSheet = async (rowData: string[]) => {
@@ -138,9 +141,14 @@ export const WordRegistration: React.FC = () => {
           <SelectionStep
             word={word}
             targetWordMeaning={targetWordMeaning}
+            cameFromScreenA={cameFromScreenA}
             onSelectFakeEtymology={() => setStep('screenB')}
             onSelectStory={() => setStep('screenD')}
             onBack={backToInput}
+            onBackToScreenA={() => {
+              setCameFromScreenA(false);
+              setStep('screenA');
+            }}
           />
         )}
         {step === 'screenA' && (
@@ -153,7 +161,10 @@ export const WordRegistration: React.FC = () => {
             onSave={handleSaveToSheet}
             isSaving={isSaving}
             flashcardTitle={title ?? ''}
-            onGoToSelection={() => setStep('selection')}
+            onGoToSelection={() => {
+              setCameFromScreenA(true);
+              setStep('selection');
+            }}
           />
         )}
         {step === 'screenB' && (
@@ -288,29 +299,33 @@ const JudgingStep: React.FC = () => (
 const SelectionStep: React.FC<{
   word: string;
   targetWordMeaning: string;
+  cameFromScreenA: boolean;
   onSelectFakeEtymology: () => void;
   onSelectStory: () => void;
   onBack: () => void;
-}> = ({ word, targetWordMeaning, onSelectFakeEtymology, onSelectStory, onBack }) => (
+  onBackToScreenA?: () => void;
+}> = ({ word, targetWordMeaning, cameFromScreenA, onSelectFakeEtymology, onSelectStory, onBack, onBackToScreenA }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-    <div
-      style={{
-        padding: '6px 14px',
-        background: 'rgba(234,179,8,0.15)',
-        border: '1px solid rgba(234,179,8,0.4)',
-        borderRadius: '999px',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '6px',
-        width: 'fit-content',
-        color: '#eab308',
-        fontSize: '0.85rem',
-        fontWeight: 600,
-        margin: '0 auto',
-      }}
-    >
-      💡 語源リストに一致しませんでした
-    </div>
+    {!cameFromScreenA && (
+      <div
+        style={{
+          padding: '6px 14px',
+          background: 'rgba(234,179,8,0.15)',
+          border: '1px solid rgba(234,179,8,0.4)',
+          borderRadius: '999px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          width: 'fit-content',
+          color: '#eab308',
+          fontSize: '0.85rem',
+          fontWeight: 600,
+          margin: '0 auto',
+        }}
+      >
+        💡 語源リストに一致しませんでした
+      </div>
+    )}
 
     <div style={{ textAlign: 'center', margin: '16px 0' }}>
       <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
@@ -371,13 +386,33 @@ const SelectionStep: React.FC<{
           onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,165,233,0.1)'}
         >
           <div style={{ fontSize: '2rem' }}>📖</div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#38bdf8' }}>ストーリーで覚える</div>
-          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>関連するストーリーやイメージを作成</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#38bdf8' }}>イメージで覚える</div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>関連するイメージと繋げる</div>
         </button>
       </div>
     </div>
 
-    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px' }}>
+    <div style={{ display: 'flex', justifyContent: 'center', marginTop: '8px', gap: '12px' }}>
+      {cameFromScreenA && onBackToScreenA && (
+        <button
+          onClick={onBackToScreenA}
+          style={{
+            padding: '12px 24px',
+            background: 'rgba(16,185,129,0.1)',
+            border: '1px solid rgba(16,185,129,0.3)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            color: '#10b981',
+            display: 'flex', alignItems: 'center', gap: '8px',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(16,185,129,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(16,185,129,0.1)'}
+        >
+          <ArrowLeft size={16} /> 画面A（語源）に戻る
+        </button>
+      )}
       <button
         onClick={onBack}
         style={{
@@ -390,7 +425,7 @@ const SelectionStep: React.FC<{
           display: 'flex', alignItems: 'center', gap: '8px',
         }}
       >
-        <ArrowLeft size={16} /> 別の単語を入力する
+        <Search size={16} /> 別の単語を入力する
       </button>
     </div>
   </div>
@@ -421,27 +456,30 @@ const ScreenA: React.FC<{
   };
 
   const handleSaveClick = () => {
-    const rowData: string[] = ['0', word, targetWordMeaning];
-    
-    // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
+    const rowData: string[] = ['0', word];
+
+    // C〜J列 (インデックス2〜9) に語源パーツと意味を入れる（最大4パーツ）
     const partsToSave = etymologyParts.slice(0, 4);
     partsToSave.forEach((part) => {
       rowData.push(part.part);
       rowData.push(part.meaning);
     });
-    
-    // K列まで空文字で埋める
-    while (rowData.length < 11) {
+
+    // J列まで空文字で埋める (1 + 1 + 8 = 10)
+    while (rowData.length < 10) {
       rowData.push('');
     }
 
-    // L列以降 (インデックス11〜) に統合イメージを分割して入れる
+    // K列以降に意味の変化（複数ステップ）を分割して入れる
     if (integratedMeaning) {
       const steps = integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
       steps.forEach(step => {
         rowData.push(step);
       });
     }
+
+    // 一番最後に、対象単語の意味を入れる
+    rowData.push(targetWordMeaning);
 
     onSave(rowData);
   };
@@ -464,7 +502,7 @@ const ScreenA: React.FC<{
           margin: '0 auto',
         }}
       >
-        ✅ 語源で覚えやすい単語です
+        語源暗記モード
       </div>
 
       {/* 対象単語 */}
@@ -611,7 +649,7 @@ const ScreenA: React.FC<{
           }}
         >
           <Lightbulb size={16} />
-          別の方法（連想・語呂合わせ等）で暗記する
+          別の方法（偽語源・イメージ）で暗記
         </button>
       </div>
 
@@ -815,7 +853,6 @@ const ScreenB: React.FC<{
   const [splitPoints, setSplitPoints] = useState<boolean[]>(new Array(word.length - 1).fill(false));
   const [aiModalPartInputs, setAiModalPartInputs] = useState<string[]>([]);
   const [aiIntermediateSteps, setAiIntermediateSteps] = useState<string[]>(['']);
-  const [isGeneratingIntegration, setIsGeneratingIntegration] = useState(false);
 
   // Update text when freeText changes
   useEffect(() => {
@@ -834,21 +871,6 @@ const ScreenB: React.FC<{
     }
     parts.push(currentPart);
     return parts;
-  };
-
-  const handleAutoGenerateIntegration = async () => {
-    const parts = getWordParts();
-    setIsGeneratingIntegration(true);
-    try {
-      const result = await autoCompleteIntegration(word, targetWordMeaning, parts, aiModalPartInputs);
-      setAiModalPartInputs(result.partMeanings);
-      setAiIntermediateSteps(result.intermediateSteps.filter(s => s.trim() !== ''));
-    } catch (err) {
-      console.error(err);
-      alert('AI自動生成に失敗しました。');
-    } finally {
-      setIsGeneratingIntegration(false);
-    }
   };
 
   const handleNextStep = () => {
@@ -874,30 +896,33 @@ const ScreenB: React.FC<{
     }
 
     const parts = getWordParts();
-    
+
     // ユーザーが作成した統合イメージを組み立てる
     const partsStr = parts.map((p, i) => `${p}（${aiModalPartInputs[i].trim() || '意味なし'}）`).join(' ＋ ');
     const validIntermediateSteps = aiIntermediateSteps.filter(s => s.trim());
     const chainSteps = [partsStr, ...validIntermediateSteps, targetWordMeaning];
 
-    const rowData: string[] = ['0', word, targetWordMeaning];
-    
-    // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
+    const rowData: string[] = ['0', word];
+
+    // C〜J列 (インデックス2〜9) に語源パーツと意味を入れる（最大4パーツ）
     const partsToSave = parts.map((p, i) => ({ part: p, meaning: aiModalPartInputs[i].trim() || '（意味なし）' })).slice(0, 4);
     partsToSave.forEach(p => {
       rowData.push(p.part);
       rowData.push(p.meaning);
     });
-    
-    // K列まで空文字で埋める
-    while (rowData.length < 11) {
+
+    // J列まで空文字で埋める
+    while (rowData.length < 10) {
       rowData.push('');
     }
 
-    // L列以降 (インデックス11〜) に統合イメージを分割して入れる
+    // K列以降に意味の変化を分割して入れる
     chainSteps.forEach(step => {
       rowData.push(step);
     });
+
+    // 一番最後に、対象単語の意味を入れる
+    rowData.push(targetWordMeaning);
 
     onSave(rowData);
   };
@@ -919,7 +944,7 @@ const ScreenB: React.FC<{
           fontWeight: 600,
         }}
       >
-        <Sparkles size={14} /> お助けAI（自由連想）
+        <Sparkles size={14} /> 偽語源モード
       </div>
 
       {/* 単語表示 */}
@@ -945,7 +970,7 @@ const ScreenB: React.FC<{
         {aiModalStep === 1 && (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', margin: '8px 0 16px 0' }}>
-              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>単語を分解して連想しやすくします</p>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>単語を語源パーツに分解してください</p>
               <div style={{ display: 'flex', alignItems: 'center', fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
                 {word.split('').map((char, index) => (
                   <React.Fragment key={index}>
@@ -1041,42 +1066,7 @@ const ScreenB: React.FC<{
         {aiModalStep === 2 && (
           <>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px', margin: '16px 0' }}>
-              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>各パーツの意味と、意味の変化（統合イメージ）を入力してください</p>
-
-              <button
-                onClick={handleAutoGenerateIntegration}
-                disabled={isGeneratingIntegration}
-                style={{
-                  padding: '10px 20px',
-                  background: 'rgba(59, 130, 246, 0.15)',
-                  border: '1px solid rgba(59, 130, 246, 0.4)',
-                  borderRadius: '999px',
-                  color: '#3b82f6',
-                  fontWeight: 600,
-                  fontSize: '0.95rem',
-                  cursor: isGeneratingIntegration ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)',
-                  opacity: isGeneratingIntegration ? 0.7 : 1,
-                }}
-                onMouseEnter={e => !isGeneratingIntegration && (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.25)')}
-                onMouseLeave={e => !isGeneratingIntegration && (e.currentTarget.style.background = 'rgba(59, 130, 246, 0.15)')}
-              >
-                {isGeneratingIntegration ? (
-                  <>
-                    <RefreshCcw size={16} className="spin-animation" />
-                    AIが考え中...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles size={16} />
-                    AIにおまかせ自動入力
-                  </>
-                )}
-              </button>
+              <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>各語源パーツの意味と、意味の変化を入力してください</p>
 
               {/* Parts Section */}
               <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'flex-start', gap: '12px', background: 'rgba(255,255,255,0.02)', padding: '24px', borderRadius: '16px', border: '1px solid var(--panel-border)', width: '100%' }}>
@@ -1120,8 +1110,8 @@ const ScreenB: React.FC<{
                           newSteps[idx] = e.target.value;
                           setAiIntermediateSteps(newSteps);
                         }}
-                        placeholder={`変化 ${idx + 1}`}
-                        style={{ flex: 1, padding: '16px', textAlign: 'center', fontSize: '1.2rem', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', fontWeight: 600 }}
+                        placeholder={`意味の変化 ${idx + 1}`}
+                        style={{ flex: 1, padding: '16px', textAlign: 'center', fontSize: '1.0rem', background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.3)', color: '#818cf8', fontWeight: 600 }}
                       />
                       <button
                         onClick={() => {
@@ -1146,7 +1136,7 @@ const ScreenB: React.FC<{
                   onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
                 >
-                  <Plus size={18} /> 変化を追加
+                  <Plus size={18} />
                 </button>
 
                 <ArrowDown size={32} color="rgba(99,102,241,0.5)" />
@@ -1231,7 +1221,7 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
   flashcardTitle: _flashcardTitleC,
 }) => {
   const [fakeEtymology, setFakeEtymology] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
 
   const fetchFakeEtymology = async () => {
     setIsLoading(true);
@@ -1245,24 +1235,6 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
       setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    let isMounted = true;
-    const initFetch = async () => {
-      setIsLoading(true);
-      try {
-        const result = await generateFakeEtymology(word, meaning, freeText);
-        if (isMounted) setFakeEtymology(result);
-      } catch (err) {
-        console.error(err);
-        if (isMounted) setFakeEtymology('偽語源の生成に失敗しました。');
-      } finally {
-        if (isMounted) setIsLoading(false);
-      }
-    };
-    initFetch();
-    return () => { isMounted = false; };
-  }, [word, meaning, freeText]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -1430,7 +1402,7 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
           fontWeight: 600,
         }}
       >
-        📖 ストーリーで覚える
+        📖 イメージで覚える
       </div>
 
       <div
@@ -1453,20 +1425,20 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
           <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-            対象単語から連想するイメージ
+            対象単語のイメージ
           </label>
           <input
             className="custom-input"
             value={imageText}
             onChange={(e) => setImageText(e.target.value)}
-            placeholder="例：リンゴが木から落ちる様子、宇宙船が発進する場面 など"
+            placeholder=""
             style={{ width: '100%', padding: '14px', fontSize: '1.1rem' }}
           />
         </div>
 
         <div>
           <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-            イメージに関する説明やストーリー
+            イメージに関する説明<br />（重要な箇所に「　」をつけてください。そこが問題になります。）
           </label>
           {explanations.map((exp, idx) => (
             <React.Fragment key={idx}>
@@ -1475,7 +1447,7 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
                   className="custom-input"
                   value={exp}
                   onChange={(e) => updateExplanation(idx, e.target.value)}
-                  placeholder="入力したイメージからどのように単語の意味につながるのか、詳細なストーリーを自由に書いてください。"
+                  placeholder=""
                   rows={4}
                   style={{ width: '100%', padding: '14px', fontSize: '1.1rem', resize: 'vertical', lineHeight: '1.6' }}
                 />
@@ -1561,14 +1533,14 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
         >
           <ArrowLeft size={16} color="currentColor" /> 戻る
         </button>
-        <button 
-          id="screen-d-save-btn" 
-          className="btn-primary" 
-          style={{ flex: 1 }} 
+        <button
+          id="screen-d-save-btn"
+          className="btn-primary"
+          style={{ flex: 1 }}
           onClick={() => {
             const rowData = ['1', word, meaning, imageText, ...explanations.filter(e => e.trim())];
             onSave(rowData);
-          }} 
+          }}
           disabled={isSaving || !imageText.trim()}
         >
           <BookOpen size={16} /> {isSaving ? '保存中...' : 'カードを保存'}
