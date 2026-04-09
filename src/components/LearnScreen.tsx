@@ -268,8 +268,12 @@ export const LearnScreen: React.FC = () => {
               </div>
             </div>
 
-            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
-              <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: '0 0 16px 0' }}>語源パーツ</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--panel-border)', borderRadius: '16px', padding: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+                <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
+                  語源で分解
+                </h4>
+              </div>
               
               {[2, 4, 6, 8].some(idx => currentWordData[idx]) ? (
                 <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -279,7 +283,14 @@ export const LearnScreen: React.FC = () => {
                     if (!part) return null;
                     return (
                       <React.Fragment key={i}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '140px' }}>
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: '8px',
+                          width: '200px'
+                        }}>
+                          {/* パーツ */}
                           <div style={{
                             background: 'rgba(16,185,129,0.15)',
                             color: '#10b981',
@@ -292,8 +303,16 @@ export const LearnScreen: React.FC = () => {
                           }}>
                             {part}
                           </div>
-                          <ArrowDown size={16} color="var(--text-secondary)" />
-                          <HiddenText text={partMeaning || '意味なし'} placeholder="意味" />
+                          
+                          {/* 下向き矢印 */}
+                          <div style={{ color: 'var(--text-secondary)' }}>
+                            <ArrowDown size={20} />
+                          </div>
+                          
+                          {/* 意味 */}
+                          <div style={{ fontSize: '1rem', fontWeight: 600, textAlign: 'center' }}>
+                            <HiddenText text={partMeaning || '意味なし'} placeholder="意味" />
+                          </div>
                         </div>
                         {i < 3 && currentWordData[partIdx + 2] && (
                           <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
@@ -309,26 +328,45 @@ export const LearnScreen: React.FC = () => {
                   この単語には語源データが登録されていません。
                 </div>
               )}
-            </div>
 
-            {/* 変化 (J列以降 〜 最後から2番目まで) */}
-            {currentWordData.length > 10 && currentWordData.slice(10, -1).some(step => step && typeof step === 'string' && step.trim()) && (
-              <div style={{ background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: '16px', padding: '24px', textAlign: 'center' }}>
-                <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '16px', fontWeight: 600 }}>変化</p>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                  {currentWordData.slice(10, -1).filter(step => step && typeof step === 'string' && step.trim()).map((step, idx, arr) => (
-                    <React.Fragment key={idx}>
-                      <HiddenText text={step} placeholder="タップして変化を表示" />
-                      {idx < arr.length - 1 && (
-                        <div style={{ color: 'rgba(16,185,129,0.5)', padding: '4px 0' }}>
-                          <ArrowDown size={24} />
+              {/* 変化 (J列以降 〜 最後から2番目まで) */}
+              {currentWordData.length > 10 && currentWordData.slice(10, -1).some(step => step && typeof step === 'string' && step.trim()) && (
+                <div style={{
+                  marginTop: '24px',
+                  padding: '24px',
+                  background: 'rgba(16,185,129,0.05)',
+                  border: '1px solid rgba(16,185,129,0.2)',
+                  borderRadius: '16px',
+                  textAlign: 'center',
+                }}>
+                  <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '20px', fontWeight: 600 }}>パーツの統合イメージ</p>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+                    {currentWordData.slice(10, -1).filter(step => step && typeof step === 'string' && step.trim()).map((step, idx, arr) => (
+                      <React.Fragment key={idx}>
+                        <div style={{
+                          padding: '12px 24px',
+                          background: 'rgba(16,185,129,0.12)',
+                          border: '1px solid rgba(16,185,129,0.3)',
+                          borderRadius: '10px',
+                          fontSize: '1.2rem',
+                          fontWeight: 700,
+                          color: '#10b981',
+                          letterSpacing: '0.05em',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                        }}>
+                          <HiddenText text={step} placeholder="タップして変化を表示" />
                         </div>
-                      )}
-                    </React.Fragment>
-                  ))}
+                        {idx < arr.length - 1 && (
+                          <div style={{ color: 'rgba(16,185,129,0.5)', padding: '6px 0' }}>
+                            <ArrowDown size={28} />
+                          </div>
+                        )}
+                      </React.Fragment>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         ) : (
           /* Type 1: イメージで覚える */
