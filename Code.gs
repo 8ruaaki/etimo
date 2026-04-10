@@ -1130,6 +1130,20 @@ function handleGetAllDatabaseWords(payload) {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var sheets = ss.getSheets();
   
+  // Usersシートから email -> username のマッピングを作成
+  var usersSheet = ss.getSheetByName('Users');
+  var emailToUsername = {};
+  if (usersSheet) {
+    var usersData = usersSheet.getDataRange().getValues();
+    for (var i = 1; i < usersData.length; i++) {
+      var username = usersData[i][1];
+      var email = usersData[i][2];
+      if (email && username) {
+        emailToUsername[email] = username;
+      }
+    }
+  }
+  
   var allWordsMap = {}; // 単語をキーにして重複を排除する
   
   // Usersとtest以外のすべてのシートを検索
@@ -1137,6 +1151,22 @@ function handleGetAllDatabaseWords(payload) {
     var sheetName = sheets[s].getName();
     if (sheetName === 'Users' || sheetName === 'test') {
       continue;
+    }
+    
+    // シート名からユーザー名を取得 (形式: Title_Email)
+    var parts = sheetName.split('_');
+    var sheetEmail = parts.length > 1 ? parts[parts.length - 1] : '';
+    var sheetUsername = emailToUsername[sheetEmail] || 'Unknown User';
+    
+    // ユーザー独自の語源シート（Usernameのシート）の場合は名前をそのまま使う
+    if (parts.length === 1 && !sheetEmail) {
+       // もしシート名が直接usernameとして存在しているかチェック
+       for (var e in emailToUsername) {
+         if (emailToUsername[e] === sheetName) {
+           sheetUsername = sheetName;
+           break;
+         }
+       }
     }
     
     // 単語帳シート(通常は "Title_Email" の形式)か、ユーザの既知語源シートなど。
@@ -1157,7 +1187,7 @@ function handleGetAllDatabaseWords(payload) {
       
       if (word && targetMeaning) {
         if (!allWordsMap[word]) {
-          allWordsMap[word] = { word: word, meaning: targetMeaning };
+          allWordsMap[word] = { word: word, meaning: targetMeaning, username: sheetUsername };
         } else {
           // すでに存在する場合、意味をマージする等の処理も可能だが今回は最初に見つけたものを採用するか、あるいは上書きする
           // 今回は最初に見つけたものを優先する
