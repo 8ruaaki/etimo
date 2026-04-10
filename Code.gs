@@ -70,6 +70,9 @@ function doPost(e) {
     if (action === 'getTestSheetEtymologies') {
       return handleGetTestSheetEtymologies(payload);
     }
+    if (action === 'getAllDatabaseWords') {
+      return handleGetAllDatabaseWords(payload);
+    }
     
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Unknown action' }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -366,33 +369,17 @@ function handleGetFlashcard(payload) {
     // 空行はスキップ（B列の単語が存在しない場合）
     if (!data[i][1]) continue;
 
-    // 最新の保存形式:
-    // A列[0]: フラグ('0'など)
-    // B列[1]: 単語
-    // C列[2]〜J列[9]: 語源パーツと意味（最大4ペア）
-    // K列[10]以降: 意味の変化のステップ
-    // 最後の列: 対象単語の意味
-    // ただし、U列(インデックス20)以降はシステムデータ(クイズやSRSのタイムスタンプ)なので無視する
-    var validRowLen = Math.min(data[i].length, 20); 
-    var targetMeaning = "";
-    // 空文字でない最後の要素を探す
-    for (var col = validRowLen - 1; col >= 2; col--) {
-      if (data[i][col] !== "" && data[i][col] !== undefined) {
-        targetMeaning = data[i][col];
-        break;
-      }
-    }
-    
-    // 旧データ（C列に意味がある場合）へのフォールバック
-    if (!targetMeaning) {
-      targetMeaning = data[i][2] || '';
-    }
-
-    var flashcard = {
-      word: data[i][1] || '', // B列: 単語
-      meaning: targetMeaning,
-      rawData: data[i] // UI側で語源パーツや意味の変化を表示できるように全データを渡す
-    };
+      // B列[1]: 単語
+      // C列[2]: 対象単語の意味
+      // どの学習モードでも、意味は常にC列（インデックス2）に保存される
+      var targetMeaning = data[i][2] || '';
+      targetMeaning = targetMeaning.toString().trim();
+      
+      var flashcard = {
+        word: data[i][1] || '', // B列: 単語
+        meaning: targetMeaning,
+        rawData: data[i] // UI側で語源パーツや意味の変化を表示できるように全データを渡す
+      };
     
     flashcards.push(flashcard);
   }
@@ -1137,4 +1124,65 @@ function handleUpdateReviewProgress(payload) {
   }
   
   return ContentService.createTextOutput(JSON.stringify({ success: false, error: '単語が見つかりません' })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleGetAllDatabaseWords(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  
+  var allWordsMap = {}; // 単語をキーにして重複を排除する
+  
+  // Usersとtest以外のすべてのシートを検索
+  for (var s = 0; s < sheets.length; s++) {
+    var sheetName = sheets[s].getName();
+    if (sheetName === 'Users' || sheetName === 'test') {
+      continue;
+    }
+    
+    // 単語帳シート(通常は "Title_Email" の形式)か、ユーザの既知語源シートなど。
+    // 今回は全単語を抽出する目的として、B列に単語が書いてあるシートを対象とする。
+    var data = sheets[s].getDataRange().getValues();
+    if (data.length === 0) continue;
+    
+    for (var i = 0; i < data.length; i++) {
+      if (!data[i][1]) continue; // B列が空ならスキップ
+      var word = data[i][1].toString().trim();
+      
+      // システムシートやヘッダーっぽい行を弾く
+      if (word === '' || word === 'Username' || word === '既知の語源') continue;
+      
+      // どの学習モードでも、意味は常にC列（インデックス2）に保存される
+      var targetMeaning = data[i][2] || '';
+      targetMeaning = targetMeaning.toString().trim();
+      
+      if (word && targetMeaning) {
+        if (!allWordsMap[word]) {
+          allWordsMap[word] = { word: word, meaning: targetMeaning };
+        } else {
+          // すでに存在する場合、意味をマージする等の処理も可能だが今回は最初に見つけたものを採用するか、あるいは上書きする
+          // 今回は最初に見つけたものを優先する
+        }
+      }
+    }
+  }
+  
+  // マップから配列に変換
+  var allWordsArray = [];
+  for (var key in allWordsMap) {
+    allWordsArray.push(allWordsMap[key]);
+  }
+  
+  // アルファベット順にソート (A-Z)
+  allWordsArray.sort(function(a, b) {
+    var wordA = a.word.toLowerCase();
+    var wordB = b.word.toLowerCase();
+    if (wordA < wordB) return -1;
+    if (wordA > wordB) return 1;
+    return 0;
+  });
+  
+  return ContentService.createTextOutput(JSON.stringify({ 
+    success: true, 
+    words: allWordsArray
+  })).setMimeType(ContentService.MimeType.JSON);
 }
