@@ -1200,6 +1200,8 @@ function handleGetAllDatabaseWords(payload) {
     var parts = sheetName.split('_');
     var sheetEmail = parts.length > 1 ? parts[parts.length - 1] : '';
     var sheetUsername = emailToUsername[sheetEmail] || 'Unknown User';
+    var wordbookTitle = '';
+    var isUserDictionary = false;
     
     // ユーザー独自の語源シート（Usernameのシート）の場合は名前をそのまま使う
     if (parts.length === 1 && !sheetEmail) {
@@ -1207,9 +1209,18 @@ function handleGetAllDatabaseWords(payload) {
        for (var e in emailToUsername) {
          if (emailToUsername[e] === sheetName) {
            sheetUsername = sheetName;
+           isUserDictionary = true;
            break;
          }
        }
+    }
+    
+    if (isUserDictionary) {
+      wordbookTitle = 'オリジナル単語帳';
+    } else if (parts.length > 1) {
+      wordbookTitle = parts.slice(0, parts.length - 1).join('_');
+    } else {
+      wordbookTitle = sheetName;
     }
     
     // 単語帳シート(通常は "Title_Email" の形式)か、ユーザの既知語源シートなど。
@@ -1238,7 +1249,7 @@ function handleGetAllDatabaseWords(payload) {
             rawData.push(data[i][col] != null ? data[i][col].toString() : '');
           }
           var cardType = data[i][0] != null ? data[i][0].toString().trim() : '';
-          allWordsMap[uniqueKey] = { word: word, meaning: targetMeaning, username: sheetUsername, type: cardType, rawData: rawData };
+          allWordsMap[uniqueKey] = { word: word, meaning: targetMeaning, username: sheetUsername, wordbook: wordbookTitle, type: cardType, rawData: rawData };
         }
       }
     }

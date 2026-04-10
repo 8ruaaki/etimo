@@ -11,6 +11,7 @@ interface WordEntry {
   isLiked?: boolean;
   type?: string;
   rawData?: string[];
+  wordbook?: string;
 }
 
 // ── 説明文を「」内をハイライト表示するコンポーネント ──
@@ -519,68 +520,68 @@ const WordDetailModal: React.FC<{
         {importStep === 'confirming' && selectedFlashcard && (() => {
           const isOverwriteTarget = registeredFlashcards.has(selectedFlashcard);
           return (
-          <div style={{
-            marginTop: '24px',
-            padding: '24px',
-            background: 'rgba(59,130,246,0.08)',
-            border: '1px solid rgba(59,130,246,0.3)',
-            borderRadius: '16px',
-            textAlign: 'center',
-          }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
-              「<span style={{ color: '#3b82f6', fontWeight: 700 }}>{selectedFlashcard}</span>」に{isOverwriteTarget ? '上書き' : '保存'}しますか？
-            </p>
-            {isOverwriteTarget && (
-              <p style={{ fontSize: '0.9rem', color: '#3b82f6', fontWeight: 700, marginBottom: '12px', padding: '10px', background: 'rgba(59,130,246,0.1)', borderRadius: '8px' }}>
-                ℹ️ 既にこの単語は登録されているため、内容を上書きします。
+            <div style={{
+              marginTop: '24px',
+              padding: '24px',
+              background: 'rgba(59,130,246,0.08)',
+              border: '1px solid rgba(59,130,246,0.3)',
+              borderRadius: '16px',
+              textAlign: 'center',
+            }}>
+              <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>
+                「<span style={{ color: '#3b82f6', fontWeight: 700 }}>{selectedFlashcard}</span>」に{isOverwriteTarget ? '上書き' : '保存'}しますか？
               </p>
-            )}
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
-              {item.word}（{item.meaning}）をインポートします
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
-              <button
-                onClick={() => setImportStep('selecting')}
-                style={{
-                  padding: '10px 28px',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid var(--panel-border)',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  color: 'var(--text-primary)',
-                  fontSize: '1rem',
-                  fontWeight: 600,
-                  transition: 'all 0.2s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-              >
-                戻る
-              </button>
-              <button
-                onClick={handleConfirmSave}
-                style={{
-                  padding: '10px 32px',
-                  background: 'var(--accent-color)',
-                  border: 'none',
-                  borderRadius: '10px',
-                  cursor: 'pointer',
-                  color: 'white',
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  transition: 'all 0.2s',
-                  boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
-              >
-                <Check size={16} /> はい
-              </button>
+              {isOverwriteTarget && (
+                <p style={{ fontSize: '0.9rem', color: '#3b82f6', fontWeight: 700, marginBottom: '12px', padding: '10px', background: 'rgba(59,130,246,0.1)', borderRadius: '8px' }}>
+                  ℹ️ 既にこの単語は登録されているため、内容を上書きします。
+                </p>
+              )}
+              <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '20px' }}>
+                {item.word}（{item.meaning}）をインポートします
+              </p>
+              <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+                <button
+                  onClick={() => setImportStep('selecting')}
+                  style={{
+                    padding: '10px 28px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid var(--panel-border)',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    color: 'var(--text-primary)',
+                    fontSize: '1rem',
+                    fontWeight: 600,
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+                >
+                  戻る
+                </button>
+                <button
+                  onClick={handleConfirmSave}
+                  style={{
+                    padding: '10px 32px',
+                    background: 'var(--accent-color)',
+                    border: 'none',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    color: 'white',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 4px 12px rgba(59,130,246,0.3)',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-1px)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                >
+                  <Check size={16} /> はい
+                </button>
+              </div>
             </div>
-          </div>
           );
         })()}
 
@@ -705,6 +706,7 @@ export const DatabaseScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedWordbook, setSelectedWordbook] = useState<string>(''); // '' means all wordbooks
   const [selectedWord, setSelectedWord] = useState<WordEntry | null>(null);
 
   useEffect(() => {
@@ -738,9 +740,9 @@ export const DatabaseScreen: React.FC = () => {
     // Optimistic update
     const isCurrentlyLiked = wordObj.isLiked;
     const increment = isCurrentlyLiked ? -1 : 1;
-    
-    const updateState = (prev: WordEntry[]) => prev.map(w => 
-      (w.word === wordObj.word && w.username === wordObj.username) 
+
+    const updateState = (prev: WordEntry[]) => prev.map(w =>
+      (w.word === wordObj.word && w.username === wordObj.username)
         ? { ...w, isLiked: !isCurrentlyLiked, likes: (w.likes || 0) + increment }
         : w
     );
@@ -760,19 +762,27 @@ export const DatabaseScreen: React.FC = () => {
     }
   };
 
+  // Extract unique wordbooks for the dropdown
+  const availableWordbooks = Array.from(new Set(words.map(w => w.wordbook).filter(Boolean))) as string[];
+
   useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredWords(words);
-      return;
+    let filtered = words;
+
+    if (selectedWordbook) {
+      filtered = filtered.filter(item => item.wordbook === selectedWordbook);
     }
-    const q = searchQuery.toLowerCase();
-    const filtered = words.filter(
-      item => item.word.toLowerCase().includes(q) ||
-        item.meaning.toLowerCase().includes(q) ||
-        (item.username && item.username.toLowerCase().includes(q))
-    );
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      filtered = filtered.filter(
+        item => item.word.toLowerCase().includes(q) ||
+          item.meaning.toLowerCase().includes(q) ||
+          (item.username && item.username.toLowerCase().includes(q))
+      );
+    }
+    
     setFilteredWords(filtered);
-  }, [searchQuery, words]);
+  }, [searchQuery, selectedWordbook, words]);
 
   if (loading) {
     return (
@@ -828,13 +838,13 @@ export const DatabaseScreen: React.FC = () => {
       )}
 
       {/* Search Box */}
-      <div style={{ marginBottom: '20px', position: 'relative' }}>
+      <div style={{ marginBottom: '16px', position: 'relative' }}>
         <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
           <Search size={20} />
         </div>
         <input
           type="text"
-          placeholder="単語や意味で検索..."
+          placeholder="単語を検索"
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           className="custom-input"
@@ -845,6 +855,39 @@ export const DatabaseScreen: React.FC = () => {
             borderRadius: '12px'
           }}
         />
+      </div>
+
+      {/* Wordbook Filter Dropdown */}
+      <div style={{ marginBottom: '20px', position: 'relative' }}>
+        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }}>
+          <BookOpen size={18} />
+        </div>
+        <select
+          value={selectedWordbook}
+          onChange={e => setSelectedWordbook(e.target.value)}
+          className="custom-input"
+          style={{
+            width: '100%',
+            padding: '12px 40px 12px 42px', /* extra left padding for icon, right for arrow */
+            fontSize: '1rem',
+            borderRadius: '12px',
+            appearance: 'none', /* hide default arrow */
+            backgroundColor: 'rgba(255,255,255,0.05)',
+            border: '1px solid var(--panel-border)',
+            color: 'var(--text-primary)',
+            cursor: 'pointer'
+          }}
+        >
+          <option value="" style={{ color: '#000' }}>すべて表示（単語帳を選択しない）</option>
+          {availableWordbooks.sort().map(wb => (
+            <option key={wb} value={wb} style={{ color: '#000' }}>
+              {wb}
+            </option>
+          ))}
+        </select>
+        <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }}>
+          <ChevronDown size={18} />
+        </div>
       </div>
 
       {/* Stats */}
