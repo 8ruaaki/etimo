@@ -1186,11 +1186,10 @@ function handleGetAllDatabaseWords(payload) {
       targetMeaning = targetMeaning.toString().trim();
       
       if (word && targetMeaning) {
-        if (!allWordsMap[word]) {
-          allWordsMap[word] = { word: word, meaning: targetMeaning, username: sheetUsername };
-        } else {
-          // すでに存在する場合、意味をマージする等の処理も可能だが今回は最初に見つけたものを採用するか、あるいは上書きする
-          // 今回は最初に見つけたものを優先する
+        // 単語 + ユーザー名をキーにして、異なるユーザーが同じ単語を登録した場合に別々に表示する
+        var uniqueKey = word + '_' + sheetUsername;
+        if (!allWordsMap[uniqueKey]) {
+          allWordsMap[uniqueKey] = { word: word, meaning: targetMeaning, username: sheetUsername };
         }
       }
     }
@@ -1208,6 +1207,11 @@ function handleGetAllDatabaseWords(payload) {
     var wordB = b.word.toLowerCase();
     if (wordA < wordB) return -1;
     if (wordA > wordB) return 1;
+    // 単語が同じ場合はユーザー名でソート
+    var userA = (a.username || '').toLowerCase();
+    var userB = (b.username || '').toLowerCase();
+    if (userA < userB) return -1;
+    if (userA > userB) return 1;
     return 0;
   });
   
