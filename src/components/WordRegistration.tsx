@@ -372,8 +372,8 @@ const SelectionStep: React.FC<{
           style={{
             flex: 1,
             padding: '24px',
-            background: 'rgba(14,165,233,0.1)',
-            border: '1px solid rgba(14,165,233,0.3)',
+            background: 'rgba(59,130,246,0.1)',
+            border: '1px solid rgba(59,130,246,0.3)',
             borderRadius: '12px',
             cursor: 'pointer',
             display: 'flex',
@@ -382,11 +382,11 @@ const SelectionStep: React.FC<{
             gap: '12px',
             transition: 'all 0.2s',
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(14,165,233,0.2)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(14,165,233,0.1)'}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(59,130,246,0.1)'}
         >
           <div style={{ fontSize: '2rem' }}>📖</div>
-          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#38bdf8' }}>イメージで覚える</div>
+          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#3b82f6' }}>イメージで覚える</div>
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>関連するイメージと繋げる</div>
         </button>
       </div>
@@ -398,17 +398,17 @@ const SelectionStep: React.FC<{
           onClick={onBackToScreenA}
           style={{
             padding: '12px 24px',
-            background: 'rgba(16,185,129,0.1)',
-            border: '1px solid rgba(16,185,129,0.3)',
+            background: 'rgba(59,130,246,0.1)',
+            border: '1px solid rgba(59,130,246,0.3)',
             borderRadius: '10px',
             cursor: 'pointer',
-            color: '#10b981',
+            color: '#3b82f6',
             display: 'flex', alignItems: 'center', gap: '8px',
             fontWeight: 600,
             transition: 'all 0.2s',
           }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(16,185,129,0.2)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'rgba(16,185,129,0.1)'}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(59,130,246,0.2)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'rgba(59,130,246,0.1)'}
         >
           <ArrowLeft size={16} /> 画面A（語源）に戻る
         </button>
@@ -446,6 +446,20 @@ const ScreenA: React.FC<{
   onGoToSelection: () => void;
 }> = ({ word, targetWordMeaning, integratedMeaning, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToSelection }) => {
   const [selectedPartIndex, setSelectedPartIndex] = useState<number | null>(null);
+  const [steps, setSteps] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (integratedMeaning) {
+      const parsedSteps = integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
+      // AIは最後に意味を付与してくることが多いため、最後のステップが対象単語の意味に近い場合は編集用ステップから除外
+      if (parsedSteps.length > 0) {
+        parsedSteps.pop(); // 最後の要素は削除し、固定で表示する
+      }
+      setSteps(parsedSteps);
+    } else {
+      setSteps([]);
+    }
+  }, [integratedMeaning]);
 
   const openModal = (partIndex: number) => {
     setSelectedPartIndex(partIndex);
@@ -456,29 +470,25 @@ const ScreenA: React.FC<{
   };
 
   const handleSaveClick = () => {
-    const rowData: string[] = ['0', word];
+    const rowData: string[] = ['0', word, targetWordMeaning];
 
-    // C〜J列 (インデックス2〜9) に語源パーツと意味を入れる（最大4パーツ）
+    // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
     const partsToSave = etymologyParts.slice(0, 4);
     partsToSave.forEach((part) => {
       rowData.push(part.part);
       rowData.push(part.meaning);
     });
 
-    // J列まで空文字で埋める (1 + 1 + 8 = 10)
-    while (rowData.length < 10) {
+    // K列まで空文字で埋める (1 + 1 + 1 + 8 = 11)
+    while (rowData.length < 11) {
       rowData.push('');
     }
 
-    // K列以降に意味の変化（複数ステップ）を分割して入れる
-    if (integratedMeaning) {
-      const steps = integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
-      steps.forEach(step => {
-        rowData.push(step);
-      });
-    }
-
-    // 一番最後に、対象単語の意味を入れる
+    // L列以降に意味の変化（複数ステップ）を分割して入れる
+    const validSteps = steps.filter(s => s.trim());
+    validSteps.forEach(step => {
+      rowData.push(step.trim());
+    });
     rowData.push(targetWordMeaning);
 
     onSave(rowData);
@@ -489,14 +499,14 @@ const ScreenA: React.FC<{
       <div
         style={{
           padding: '6px 14px',
-          background: 'rgba(16,185,129,0.15)',
-          border: '1px solid rgba(16,185,129,0.4)',
+          background: 'rgba(59,130,246,0.15)',
+          border: '1px solid rgba(59,130,246,0.4)',
           borderRadius: '999px',
           display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
           width: 'fit-content',
-          color: '#10b981',
+          color: '#3b82f6',
           fontSize: '0.85rem',
           fontWeight: 600,
           margin: '0 auto',
@@ -543,8 +553,8 @@ const ScreenA: React.FC<{
                   <div
                     onClick={() => openModal(idx)}
                     style={{
-                      background: 'rgba(16,185,129,0.15)',
-                      color: '#10b981',
+                      background: 'rgba(59,130,246,0.15)',
+                      color: '#3b82f6',
                       padding: '8px 16px',
                       borderRadius: '8px',
                       fontWeight: 700,
@@ -556,10 +566,10 @@ const ScreenA: React.FC<{
                       border: '2px solid transparent',
                     }}
                     onMouseEnter={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(16,185,129,0.25)';
+                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(59,130,246,0.25)';
                     }}
                     onMouseLeave={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(16,185,129,0.15)';
+                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(59,130,246,0.15)';
                     }}
                   >
                     {part.part}
@@ -584,42 +594,69 @@ const ScreenA: React.FC<{
             ))}
           </div>
 
-          {integratedMeaning && (
-            <div style={{
-              marginTop: '24px',
-              padding: '24px',
-              background: 'rgba(16,185,129,0.05)',
-              border: '1px solid rgba(16,185,129,0.2)',
-              borderRadius: '16px',
-              textAlign: 'center',
-            }}>
-              <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '20px', fontWeight: 600 }}>パーツの統合イメージ</p>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-                {integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean).map((step, idx, arr) => (
-                  <React.Fragment key={idx}>
-                    <div style={{
-                      padding: '12px 24px',
-                      background: 'rgba(16,185,129,0.12)',
-                      border: '1px solid rgba(16,185,129,0.3)',
-                      borderRadius: '10px',
-                      fontSize: '1.2rem',
-                      fontWeight: 700,
-                      color: '#10b981',
-                      letterSpacing: '0.05em',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
-                    }}>
-                      {step}
-                    </div>
-                    {idx < arr.length - 1 && (
-                      <div style={{ color: 'rgba(16,185,129,0.5)', padding: '6px 0' }}>
-                        <ArrowDown size={28} />
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            background: 'rgba(59,130,246,0.05)',
+            border: '1px solid rgba(59,130,246,0.2)',
+            borderRadius: '16px',
+            textAlign: 'center',
+          }}>
+            <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginBottom: '20px', fontWeight: 600 }}>パーツの統合イメージ（意味の変化）</p>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+              {steps.map((step, idx) => (
+                <React.Fragment key={idx}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', maxWidth: '500px' }}>
+                    <input
+                      type="text"
+                      className="custom-input"
+                      value={step}
+                      onChange={(e) => {
+                        const newSteps = [...steps];
+                        newSteps[idx] = e.target.value;
+                        setSteps(newSteps);
+                      }}
+                      placeholder={`意味の変化 ${idx + 1}`}
+                      style={{ flex: 1, padding: '12px 24px', textAlign: 'center', fontSize: '1.2rem', background: 'rgba(59,130,246,0.12)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', fontWeight: 700, letterSpacing: '0.05em' }}
+                    />
+                    <button
+                      onClick={() => {
+                        const newSteps = steps.filter((_, i) => i !== idx);
+                        setSteps(newSteps);
+                      }}
+                      style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: 'none', borderRadius: '8px', width: '44px', height: '44px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', fontSize: '1.2rem', transition: 'all 0.2s', flexShrink: 0 }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.2)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
+                      title="削除"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div style={{ color: 'rgba(59,130,246,0.5)', padding: '4px 0' }}>
+                    <ArrowDown size={28} />
+                  </div>
+                </React.Fragment>
+              ))}
+
+              <button
+                onClick={() => setSteps([...steps, ''])}
+                style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-secondary)', border: '1px dashed var(--panel-border)', borderRadius: '8px', padding: '12px 24px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1rem', transition: 'all 0.2s', marginTop: '8px' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
+              >
+                <Plus size={18} /> 追加する
+              </button>
+
+              <div style={{ color: 'rgba(59,130,246,0.5)', padding: '12px 0' }}>
+                <ArrowDown size={28} />
+              </div>
+
+              {/* 固定の最終意味 */}
+              <div style={{ padding: '16px 24px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', borderRadius: '12px', fontSize: '1.4rem', fontWeight: 800, textAlign: 'center', width: '100%', maxWidth: '500px' }}>
+                {targetWordMeaning}
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -751,7 +788,7 @@ const ScreenA: React.FC<{
             <h3 style={{
               fontSize: '2rem',
               fontWeight: 700,
-              color: '#10b981',
+              color: '#3b82f6',
               textAlign: 'center',
               marginBottom: '8px',
             }}>
@@ -821,7 +858,7 @@ const ScreenA: React.FC<{
                       background: 'rgba(16, 185, 129, 0.15)',
                       borderRadius: '8px',
                       fontSize: '0.9rem',
-                      color: '#10b981',
+                      color: '#3b82f6',
                       fontWeight: 600,
                     }}>
                       {relatedWord.breakdown}
@@ -902,27 +939,24 @@ const ScreenB: React.FC<{
     const validIntermediateSteps = aiIntermediateSteps.filter(s => s.trim());
     const chainSteps = [partsStr, ...validIntermediateSteps, targetWordMeaning];
 
-    const rowData: string[] = ['0', word];
+    const rowData: string[] = ['0', word, targetWordMeaning];
 
-    // C〜J列 (インデックス2〜9) に語源パーツと意味を入れる（最大4パーツ）
+    // D〜K列 (インデックス3〜10) に語源パーツと意味を入れる（最大4パーツ）
     const partsToSave = parts.map((p, i) => ({ part: p, meaning: aiModalPartInputs[i].trim() || '（意味なし）' })).slice(0, 4);
     partsToSave.forEach(p => {
       rowData.push(p.part);
       rowData.push(p.meaning);
     });
 
-    // J列まで空文字で埋める
-    while (rowData.length < 10) {
+    // K列まで空文字で埋める (1 + 1 + 1 + 8 = 11)
+    while (rowData.length < 11) {
       rowData.push('');
     }
 
-    // K列以降に意味の変化を分割して入れる
+    // L列以降に意味の変化を分割して入れる
     chainSteps.forEach(step => {
       rowData.push(step);
     });
-
-    // 一番最後に、対象単語の意味を入れる
-    rowData.push(targetWordMeaning);
 
     onSave(rowData);
   };
@@ -1026,7 +1060,7 @@ const ScreenB: React.FC<{
               onClick={handleNextStep}
               style={{
                 padding: '16px',
-                background: 'var(--primary-color)',
+                background: 'var(--accent-color)',
                 border: 'none',
                 borderRadius: '8px',
                 color: 'white',
@@ -1073,7 +1107,7 @@ const ScreenB: React.FC<{
                 {getWordParts().map((part, idx) => (
                   <React.Fragment key={idx}>
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#10b981' }}>{part}</span>
+                      <span style={{ fontSize: '1.8rem', fontWeight: 800, color: '#3b82f6' }}>{part}</span>
                       <input
                         type="text"
                         className="custom-input"
@@ -1143,7 +1177,7 @@ const ScreenB: React.FC<{
               </div>
 
               {/* Final Meaning Section */}
-              <div style={{ padding: '16px 24px', background: 'rgba(16,185,129,0.15)', border: '1px solid rgba(16,185,129,0.3)', color: '#10b981', borderRadius: '12px', fontSize: '1.4rem', fontWeight: 800, textAlign: 'center', width: '100%', maxWidth: '500px' }}>
+              <div style={{ padding: '16px 24px', background: 'rgba(59,130,246,0.15)', border: '1px solid rgba(59,130,246,0.3)', color: '#3b82f6', borderRadius: '12px', fontSize: '1.4rem', fontWeight: 800, textAlign: 'center', width: '100%', maxWidth: '500px' }}>
                 {targetWordMeaning}
               </div>
             </div>
@@ -1175,7 +1209,7 @@ const ScreenB: React.FC<{
                 style={{
                   flex: 2,
                   padding: '16px',
-                  background: isSaving || !aiModalPartInputs.some(input => input.trim()) ? 'rgba(99,102,241,0.3)' : 'var(--primary-color)',
+                  background: isSaving || !aiModalPartInputs.some(input => input.trim()) ? 'rgba(99,102,241,0.3)' : 'var(--accent-color)',
                   border: 'none',
                   borderRadius: '8px',
                   color: 'white',
@@ -1320,7 +1354,7 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
                 outline: 'none',
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = 'var(--primary-color)';
+                e.target.style.borderColor = 'var(--accent-color)';
                 e.target.style.background = 'rgba(255,255,255,0.05)';
               }}
               onBlur={(e) => {
@@ -1390,14 +1424,14 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
       <div
         style={{
           padding: '6px 14px',
-          background: `rgba(14,165,233,0.15)`,
-          border: `1px solid rgba(14,165,233,0.4)`,
+          background: `rgba(59,130,246,0.15)`,
+          border: `1px solid rgba(59,130,246,0.4)`,
           borderRadius: '999px',
           display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
           width: 'fit-content',
-          color: '#38bdf8',
+          color: '#3b82f6',
           fontSize: '0.85rem',
           fontWeight: 600,
         }}
@@ -1680,7 +1714,7 @@ const ScreenE: React.FC<{ word: string; meaning: string; freeText: string; onBac
                 outline: 'none',
               }}
               onFocus={(e) => {
-                e.target.style.borderColor = 'var(--primary-color)';
+                e.target.style.borderColor = 'var(--accent-color)';
                 e.target.style.background = 'rgba(255,255,255,0.05)';
               }}
               onBlur={(e) => {

@@ -39,19 +39,16 @@ export const WordList: React.FC = () => {
         const rawWords = result.flashcards || result.words || [];
         const mappedWords = rawWords.map((item: any) => {
           if (Array.isArray(item) && item.length >= 3) {
-            // GASが配列をそのまま返してきた場合のハンドリング（旧コードのまま）
-            const rowLen = item.length;
-            let targetMeaning = "";
-            for (let col = rowLen - 1; col >= 2; col--) {
-              if (item[col] !== "" && item[col] !== undefined) {
-                targetMeaning = item[col];
-                break;
-              }
-            }
-            if (!targetMeaning) targetMeaning = item[2] || '';
-            return { word: item[1] || '', meaning: targetMeaning, rawData: item };
+            // 単語はインデックス1 (B列)、意味はインデックス2 (C列) で固定
+            const word = item[1] || '';
+            const meaning = item[2] || '';
+            return { word, meaning, rawData: item };
           }
-          // すでに {word, meaning, rawData} オブジェクトになっている場合
+          // GASの古いロジックで末尾の要素がmeaningに設定されている可能性があるため、
+          // 常にC列(インデックス2)を意味として強制的に上書きする
+          if (item && item.rawData && Array.isArray(item.rawData) && item.rawData.length >= 3) {
+            return { ...item, meaning: item.rawData[2] || item.meaning };
+          }
           return item; 
         });
         setWords(mappedWords);
@@ -157,39 +154,6 @@ export const WordList: React.FC = () => {
                 </h3>
                 {wordObj.meaning && (
                   <p style={{ color: 'var(--text-secondary)' }}>{wordObj.meaning}</p>
-                )}
-                {wordObj.rawData && wordObj.rawData.length > 3 && wordObj.rawData[0] === '0' && (
-                  <div style={{ marginTop: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '4px' }}>
-                      {/* C〜J列 (index 2-9) の語源パーツを抽出 */}
-                      {Array.from({ length: 4 }).map((_, i) => {
-                        const part = wordObj.rawData![2 + i * 2];
-                        const meaning = wordObj.rawData![3 + i * 2];
-                        if (part && part.trim() !== '') {
-                          return (
-                            <span key={i} style={{ background: 'rgba(16,185,129,0.1)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981' }}>
-                              {part} ({meaning})
-                            </span>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                    {/* K列 (index 10) 以降の変化ステップを抽出（最後の要素は対象単語の意味なので除外） */}
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', alignItems: 'center' }}>
-                      {wordObj.rawData.slice(10, -1).map((step, i, arr) => {
-                        if (step && typeof step === 'string' && step.trim() !== '') {
-                          return (
-                            <React.Fragment key={i}>
-                              <span style={{ color: '#818cf8' }}>{step}</span>
-                              {i < arr.length - 1 && <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>→</span>}
-                            </React.Fragment>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  </div>
                 )}
               </div>
               <button

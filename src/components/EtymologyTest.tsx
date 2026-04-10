@@ -217,7 +217,7 @@ export const EtymologyTest: React.FC = () => {
     return (
       <div className="glass-panel" style={{ padding: '40px', maxWidth: '600px' }}>
         <div style={{ textAlign: 'center' }}>
-          <CheckCircle size={64} color="#10b981" style={{ margin: '0 auto 20px' }} />
+          <CheckCircle size={64} color="#3b82f6" style={{ margin: '0 auto 20px' }} />
           <h2 style={{ fontSize: '1.5rem', marginBottom: '16px' }}>診断完了</h2>
           <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>
             {questions.length}問中{correctCount}問正解しました。
@@ -313,7 +313,7 @@ export const EtymologyTest: React.FC = () => {
             if (isAnswered) {
               if (isCorrect) {
                 backgroundColor = 'rgba(16, 185, 129, 0.2)';
-                borderColor = '#10b981';
+                borderColor = '#3b82f6';
               } else if (isSelected) {
                 backgroundColor = 'rgba(239, 68, 68, 0.2)';
                 borderColor = '#ef4444';
@@ -343,7 +343,7 @@ export const EtymologyTest: React.FC = () => {
                 }}
               >
                 <span>{option}</span>
-                {isAnswered && isCorrect && <CheckCircle size={24} color="#10b981" />}
+                {isAnswered && isCorrect && <CheckCircle size={24} color="#3b82f6" />}
                 {isAnswered && isSelected && !isCorrect && <XCircle size={24} color="#ef4444" />}
               </button>
             );

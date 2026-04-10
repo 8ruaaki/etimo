@@ -862,19 +862,22 @@ export const autoCompleteIntegration = async (
 パーツ: ${parts.join(', ')}
 
 以下の2点を行ってください：
-1. 各パーツに対して、最も覚えやすい（あるいは実際の語源に近い）「パーツの意味」を推測してください。既に意味が入力されている場合は、それを尊重して他の空欄を埋めてください。
+1. 各パーツに対して、最も覚えやすい（あるいは実際の語源に近い）「パーツの意味」を推測してください。既に意味が入力されている場合は、絶対にそれを変えず、それを尊重して他の空欄を埋めてください。
 現在の入力状況: ${parts.map((p, i) => `${p} = ${currentPartMeanings[i] || '(空欄)'}`).join(', ')}
-2. それらのパーツの意味を組み合わせて、最終的な意味「${targetWordMeaning}」に繋がるまでの「意味の変化（連想のステップ）」を1〜3段階で作成してください。
+
+2. それらのパーツの意味を組み合わせて、最終的な意味「${targetWordMeaning}」に繋がるまでの「意味の変化（連想のステップ）」を2〜3段階で作成してください。
 
 【ルール】
-- 提案するパーツの意味（partMeanings）は、要素数が必ずパーツの数（${parts.length}個）と一致するように配列で返してください。空欄だった箇所だけを埋めるのではなく、すべて（入力済みも含む）のパーツの意味を並べてください。
-- 提案する変化のステップ（intermediateSteps）は、パーツの意味から最終的な意味へ至る中間ステップの配列です。
+- 提案するパーツの意味（partMeanings）は、要素数が必ずパーツの数（${parts.length}個）と一致するように配列で返してください。
+- すでにユーザーが入力済みの意味は、一言一句絶対に変更せずそのまま出力してください。
+- 変化1（intermediateStepsの1つ目）には、必ず「それぞれの語源パーツの意味の足し算」を入れてください（例：「外へ ＋ 運ぶ」）。
+- 変化2以降は、長々とした文章（「〜だから」など）ではなく、名詞や体言止めで端的にどういう変化・連想をするのかを書いてください（例：「外に持ち出すこと」）。
 - JSONのキーと値は必ずダブルクォーテーションで囲み、値の中にダブルクォーテーションや改行を含めないでください。
 
 出力例：
 {
-  "partMeanings": ["パーツ1の意味", "パーツ2の意味"],
-  "intermediateSteps": ["変化1", "変化2"]
+  "partMeanings": ["外へ", "運ぶ"],
+  "intermediateSteps": ["外へ ＋ 運ぶ", "外に持ち出すこと"]
 }
 `.trim();
 
@@ -925,7 +928,47 @@ export const autoCompleteIntegration = async (
     if (match) cleanText = match[1].trim();
     else cleanText = cleanText.replace(/^```json\s*/i, '').replace(/```\s*$/, '').trim();
 
-    return JSON.parse(cleanText) as { partMeanings: string[]; intermediateSteps: string[] };
+    // JSONの末尾が不完全な場合（途中で切れているなど）に対する応急処置
+    if (cleanText && !cleanText.endsWith('}')) {
+      console.warn('[AutoCompleteIntegration] JSONが途中で切れている可能性があります。自動修復を試みます。');
+      
+      let fixedText = cleanText;
+      
+      // 文字列の途中で切れている場合は一旦閉じる
+      if ((fixedText.match(/"/g) || []).length % 2 !== 0) {
+        fixedText += '"';
+      }
+      
+      // 少し強引ですが、パースできるまでよくある閉じ括弧の組み合わせを試す
+      const tryAppend = [
+        "", "}", "]}", "}}", "]}}", "} ]}", "} ] }", "} ] } }"
+      ];
+
+      let parsed: { partMeanings: string[]; intermediateSteps: string[] } | null = null;
+      for (const suffix of tryAppend) {
+        try {
+          parsed = JSON.parse(fixedText + suffix) as { partMeanings: string[]; intermediateSteps: string[] };
+          break;
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (parsed) {
+        console.info('[AutoCompleteIntegration] 途切れたJSONの修復に成功しました。');
+        return parsed;
+      } else {
+        console.error('[AutoCompleteIntegration] 途切れたJSONの修復に失敗しました。');
+        throw new Error(`Gemini API returned an incomplete JSON response: ${cleanText}`);
+      }
+    }
+
+    try {
+      return JSON.parse(cleanText) as { partMeanings: string[]; intermediateSteps: string[] };
+    } catch (parseErr) {
+      console.error('[AutoCompleteIntegration] JSONパースエラー. cleanText:', cleanText);
+      throw parseErr;
+    }
   } catch (err: any) {
     console.error('[AutoCompleteIntegration] Error:', err);
     throw err;

@@ -312,3 +312,28 @@ export const deleteWordFromFlashcard = async (email: string, title: string, word
     throw error;
   }
 };
+
+export const updateReviewProgress = async (email: string, title: string, word: string, isCorrect: boolean) => {
+  if (!GAS_WEB_APP_URL) {
+    console.warn('VITE_GAS_WEB_APP_URL is not set. Simulating success.');
+    return { success: true };
+  }
+
+  try {
+    const response = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'updateReviewProgress',
+        email,
+        title,
+        word,
+        isCorrect
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to update review progress:', error);
+    throw error;
+  }
+};

@@ -227,36 +227,34 @@ export const FlashcardList: React.FC = () => {
         </div>
       )}
 
-      <button
-        onClick={() => setShowCreateDialog(true)}
-        style={{
-          position: 'fixed',
-          bottom: '40px',
-          left: '40px',
-          width: '60px',
-          height: '60px',
-          background: 'var(--accent-color)',
-          border: 'none',
-          borderRadius: '50%',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
-          transition: 'all 0.3s ease',
-          zIndex: 10
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.6)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
-        }}
-      >
-        <PlusCircle size={32} color="white" />
-      </button>
+      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', marginBottom: '20px' }}>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          style={{
+            width: '60px',
+            height: '60px',
+            background: 'var(--accent-color)',
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
+            transition: 'all 0.3s ease',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'scale(1.1)';
+            e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.6)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'scale(1)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
+          }}
+        >
+          <PlusCircle size={32} color="white" />
+        </button>
+      </div>
 
       {showCreateDialog && (
         <div

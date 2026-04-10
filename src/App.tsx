@@ -7,6 +7,10 @@ import { EtymologyTest } from './components/EtymologyTest'
 import { FlashcardList } from './components/FlashcardList'
 import { WordList } from './components/WordList'
 import { WordRegistration } from './components/WordRegistration'
+import { LearnMode } from './components/LearnMode'
+import { LearnScreen } from './components/LearnScreen'
+import { TestMode } from './components/TestMode'
+import { TestSelectionScreen } from './components/TestSelectionScreen'
 
 function App() {
   return (
@@ -19,6 +23,10 @@ function App() {
       <Route path="/flashcards" element={<FlashcardList />} />
       <Route path="/flashcards/:title" element={<WordList />} />
       <Route path="/flashcards/:title/add" element={<WordRegistration />} />
+      <Route path="/learn" element={<LearnMode />} />
+      <Route path="/learn/:title" element={<LearnScreen />} />
+      <Route path="/test" element={<TestMode />} />
+      <Route path="/test/:title" element={<TestSelectionScreen />} />
     </Routes>
   )
 }

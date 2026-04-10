@@ -43,6 +43,9 @@ function doPost(e) {
     if (action === 'deleteWordFromFlashcard') {
       return handleDeleteWordFromFlashcard(payload);
     }
+    if (action === 'updateReviewProgress') {
+      return handleUpdateReviewProgress(payload);
+    }
     if (action === 'saveQuiz') {
       return handleSaveQuiz(payload);
     }
@@ -369,12 +372,11 @@ function handleGetFlashcard(payload) {
     // C列[2]〜J列[9]: 語源パーツと意味（最大4ペア）
     // K列[10]以降: 意味の変化のステップ
     // 最後の列: 対象単語の意味
-
-    // 対象単語の意味は、データが入っている最後の列にあるはず
-    var rowLen = data[i].length;
+    // ただし、U列(インデックス20)以降はシステムデータ(クイズやSRSのタイムスタンプ)なので無視する
+    var validRowLen = Math.min(data[i].length, 20); 
     var targetMeaning = "";
     // 空文字でない最後の要素を探す
-    for (var col = rowLen - 1; col >= 2; col--) {
+    for (var col = validRowLen - 1; col >= 2; col--) {
       if (data[i][col] !== "" && data[i][col] !== undefined) {
         targetMeaning = data[i][col];
         break;
@@ -1028,4 +1030,111 @@ function doOptions(e) {
   };
   return ContentService.createTextOutput("")
     .setMimeType(ContentService.MimeType.TEXT);
+}
+
+function handleUpdateReviewProgress(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheetName = payload.title + '_' + payload.email;
+  var sheet = ss.getSheetByName(sheetName);
+  
+  if (!sheet) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '単語帳が見つかりません。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  var word = payload.word;
+  var isCorrect = payload.isCorrect;
+  var now = new Date();
+  
+  for (var i = 0; i < data.length; i++) {
+    if (data[i][1] === word) {
+      var rowIndex = i + 1;
+      
+      var uVal = data[i][20]; // U列はindex 20
+      var vVal = data[i][21]; // V列はindex 21
+      var wVal = data[i][22]; // W列はindex 22
+      var xVal = data[i][23]; // X列はindex 23
+
+      // 復習時間が来ているか判定する
+      var nextTimeStr = xVal || wVal || vVal;
+      var isDue = true;
+      
+      if (nextTimeStr && nextTimeStr.toString().trim() !== '') {
+        var nextStr = nextTimeStr.toString().trim();
+        if (nextStr.indexOf('+') === -1 && nextStr.indexOf('Z') === -1) {
+          nextStr += '+09:00';
+        }
+        nextStr = nextStr.replace(/\//g, '-');
+        var targetDate = new Date(nextStr);
+        // 現在時刻が予定時刻より前なら「まだ復習時間に来ていない」
+        if (!isNaN(targetDate.getTime()) && now.getTime() < targetDate.getTime()) {
+          isDue = false;
+        }
+      }
+
+      if (!isDue) {
+        if (isCorrect) {
+          // 復習時間に来ていないのに正解が押された場合は、何も変更しない
+          return ContentService.createTextOutput(JSON.stringify({ 
+            success: true, 
+            message: 'Not due yet. No changes made.' 
+          })).setMimeType(ContentService.MimeType.JSON);
+        } else {
+          // 復習時間に来ていないのにもう一度が押された場合は、一番最後のタイムスタンプを消去する
+          if (xVal && xVal.toString().trim() !== '') {
+            sheet.getRange(rowIndex, 24).clearContent(); // X列消去
+          } else if (wVal && wVal.toString().trim() !== '') {
+            sheet.getRange(rowIndex, 23).clearContent(); // W列消去
+          } else if (vVal && vVal.toString().trim() !== '') {
+            sheet.getRange(rowIndex, 22).clearContent(); // V列消去
+          } else if (uVal && uVal.toString().trim() !== '') {
+            sheet.getRange(rowIndex, 21).clearContent(); // U列消去
+          }
+          return ContentService.createTextOutput(JSON.stringify({ 
+            success: true, 
+            message: 'Not due yet. Reverted the last timestamp.' 
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+
+      // --- 以下は復習時間が来ている（または新規学習）場合の通常の処理 ---
+      
+      // U列(21列目)に今の時刻 (日本時間で保存)
+      var jstNow = Utilities.formatDate(now, "Asia/Tokyo", "yyyy-MM-dd'T'HH:mm:ssXXX");
+      sheet.getRange(rowIndex, 21).setValue(jstNow);
+      
+      if (isCorrect) {
+        if (!vVal || vVal.toString().trim() === '') {
+          // Vが空ならVに+1日
+          var nextTime = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+          var jstNext = Utilities.formatDate(nextTime, "Asia/Tokyo", "yyyy-MM-dd'T'HH:mm:ssXXX");
+          sheet.getRange(rowIndex, 22).setValue(jstNext);
+        } else if (!wVal || wVal.toString().trim() === '') {
+          // Vが埋まっていてWが空ならW(index 22)にVの+3日
+          var vStr = vVal.toString();
+          if (vStr.indexOf('+') === -1 && vStr.indexOf('Z') === -1) vStr += '+09:00';
+          var vDate = new Date(vStr);
+          if (isNaN(vDate.getTime())) vDate = now;
+          var nextTime = new Date(vDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+          var jstNext = Utilities.formatDate(nextTime, "Asia/Tokyo", "yyyy-MM-dd'T'HH:mm:ssXXX");
+          sheet.getRange(rowIndex, 23).setValue(jstNext);
+        } else {
+          // Wが埋まっているならX(index 23)にWの+7日
+          var wStr = wVal.toString();
+          if (wStr.indexOf('+') === -1 && wStr.indexOf('Z') === -1) wStr += '+09:00';
+          var wDate = new Date(wStr);
+          if (isNaN(wDate.getTime())) wDate = now;
+          var nextTime = new Date(wDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+          var jstNext = Utilities.formatDate(nextTime, "Asia/Tokyo", "yyyy-MM-dd'T'HH:mm:ssXXX");
+          sheet.getRange(rowIndex, 24).setValue(jstNext);
+        }
+      }
+      return ContentService.createTextOutput(JSON.stringify({ success: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+  
+  return ContentService.createTextOutput(JSON.stringify({ success: false, error: '単語が見つかりません' })).setMimeType(ContentService.MimeType.JSON);
 }

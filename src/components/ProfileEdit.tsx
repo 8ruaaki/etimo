@@ -106,7 +106,7 @@ export const ProfileEdit: React.FC = () => {
         )}
         
         {success && (
-          <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #10b981', color: '#10b981', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', textAlign: 'center' }}>
+          <div style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid #3b82f6', color: '#3b82f6', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem', textAlign: 'center' }}>
             {success}
           </div>
         )}
