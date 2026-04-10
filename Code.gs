@@ -73,6 +73,9 @@ function doPost(e) {
     if (action === 'getAllDatabaseWords') {
       return handleGetAllDatabaseWords(payload);
     }
+    if (action === 'toggleLike') {
+      return handleToggleLike(payload);
+    }
     
     return ContentService.createTextOutput(JSON.stringify({ success: false, error: 'Unknown action' }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -291,12 +294,31 @@ function handleAddWordToFlashcard(payload) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
-  // シートにデータを追加
-  flashcardSheet.appendRow(payload.rowData);
+  var targetWord = payload.rowData[1];
+  var data = flashcardSheet.getDataRange().getValues();
+  var updateRowIndex = -1;
+  
+  if (targetWord) {
+    for (var i = 0; i < data.length; i++) {
+      if (data[i][1] && data[i][1].toString().toLowerCase() === targetWord.toString().toLowerCase()) {
+        updateRowIndex = i + 1; // 1-indexed
+        break;
+      }
+    }
+  }
+
+  if (updateRowIndex !== -1) {
+    // 既存のデータを上書き
+    var targetRange = flashcardSheet.getRange(updateRowIndex, 1, 1, payload.rowData.length);
+    targetRange.setValues([payload.rowData]);
+  } else {
+    // シートに新規データを追加
+    flashcardSheet.appendRow(payload.rowData);
+  }
   
   return ContentService.createTextOutput(JSON.stringify({ 
     success: true, 
-    message: '単語が追加されました。'
+    message: '単語が追加・上書きされました。'
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -331,17 +353,38 @@ function handleGetFlashcardList(payload) {
   
   // E列（インデックス4）以降の単語帳名を取得
   var flashcardNames = [];
+  var registeredFlashcards = [];
   var userRow = userData[userRowIndex];
   
   for (var j = 4; j < userRow.length; j++) {
     if (userRow[j] && userRow[j].toString().trim() !== '') {
-      flashcardNames.push(userRow[j].toString());
+      var fcName = userRow[j].toString();
+      flashcardNames.push(fcName);
+      
+      // 指定されたwordが送られている場合、その単語帳に登録済みかチェックする
+      if (payload.word) {
+        var fcSheet = ss.getSheetByName(fcName + '_' + payload.email);
+        if (fcSheet) {
+          var fcData = fcSheet.getDataRange().getValues();
+          var isRegistered = false;
+          for (var k = 0; k < fcData.length; k++) {
+            if (fcData[k][1] && fcData[k][1].toString().toLowerCase() === payload.word.toLowerCase()) {
+              isRegistered = true;
+              break;
+            }
+          }
+          if (isRegistered) {
+            registeredFlashcards.push(fcName);
+          }
+        }
+      }
     }
   }
   
   return ContentService.createTextOutput(JSON.stringify({ 
     success: true, 
-    flashcards: flashcardNames
+    flashcards: flashcardNames,
+    registeredFlashcards: registeredFlashcards
   })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -1146,10 +1189,10 @@ function handleGetAllDatabaseWords(payload) {
   
   var allWordsMap = {}; // 単語をキーにして重複を排除する
   
-  // Usersとtest以外のすべてのシートを検索
+  // Usersとtestとnice以外のすべてのシートを検索
   for (var s = 0; s < sheets.length; s++) {
     var sheetName = sheets[s].getName();
-    if (sheetName === 'Users' || sheetName === 'test') {
+    if (sheetName === 'Users' || sheetName === 'test' || sheetName === 'nice') {
       continue;
     }
     
@@ -1189,8 +1232,40 @@ function handleGetAllDatabaseWords(payload) {
         // 単語 + ユーザー名をキーにして、異なるユーザーが同じ単語を登録した場合に別々に表示する
         var uniqueKey = word + '_' + sheetUsername;
         if (!allWordsMap[uniqueKey]) {
-          allWordsMap[uniqueKey] = { word: word, meaning: targetMeaning, username: sheetUsername };
+          // rawDataはU列(index 20)までに限定（復習タイムスタンプは不要）
+          var rawData = [];
+          for (var col = 0; col < Math.min(data[i].length, 20); col++) {
+            rawData.push(data[i][col] != null ? data[i][col].toString() : '');
+          }
+          var cardType = data[i][0] != null ? data[i][0].toString().trim() : '';
+          allWordsMap[uniqueKey] = { word: word, meaning: targetMeaning, username: sheetUsername, type: cardType, rawData: rawData };
         }
+      }
+    }
+  }
+  
+  // ---- いいね情報の取得と結合 ----
+  var niceSheet = ss.getSheetByName('nice');
+  var likesMap = {}; // { uniqueKey: { count: number, isLikedByCurrentUser: boolean } }
+  var currentUserEmail = payload && payload.email ? payload.email : '';
+  
+  if (niceSheet) {
+    var niceData = niceSheet.getDataRange().getValues();
+    for (var k = 0; k < niceData.length; k++) {
+      var likerEmail = niceData[k][0];
+      var likedWord = niceData[k][1];
+      var likedCreator = niceData[k][2];
+      
+      if (!likedWord || !likedCreator) continue;
+      
+      var uKey = likedWord + '_' + likedCreator;
+      if (!likesMap[uKey]) {
+        likesMap[uKey] = { count: 0, isLikedByCurrentUser: false };
+      }
+      
+      likesMap[uKey].count++;
+      if (likerEmail.toString().trim() === currentUserEmail.toString().trim()) {
+        likesMap[uKey].isLikedByCurrentUser = true;
       }
     }
   }
@@ -1198,16 +1273,24 @@ function handleGetAllDatabaseWords(payload) {
   // マップから配列に変換
   var allWordsArray = [];
   for (var key in allWordsMap) {
-    allWordsArray.push(allWordsMap[key]);
+    var wordObj = allWordsMap[key];
+    var likeInfo = likesMap[key] || { count: 0, isLikedByCurrentUser: false };
+    wordObj.likes = likeInfo.count;
+    wordObj.isLiked = likeInfo.isLikedByCurrentUser;
+    allWordsArray.push(wordObj);
   }
   
-  // アルファベット順にソート (A-Z)
+  // アルファベット順にソート (A-Z)、同じ単語の場合はいいね数の多い順
   allWordsArray.sort(function(a, b) {
     var wordA = a.word.toLowerCase();
     var wordB = b.word.toLowerCase();
     if (wordA < wordB) return -1;
     if (wordA > wordB) return 1;
-    // 単語が同じ場合はユーザー名でソート
+    // 単語が同じ場合はいいね数の多い方を上に表示（降順）
+    var likesA = a.likes || 0;
+    var likesB = b.likes || 0;
+    if (likesB !== likesA) return likesB - likesA;
+    // いいね数も同じ場合はユーザー名でソート
     var userA = (a.username || '').toLowerCase();
     var userB = (b.username || '').toLowerCase();
     if (userA < userB) return -1;
@@ -1219,4 +1302,55 @@ function handleGetAllDatabaseWords(payload) {
     success: true, 
     words: allWordsArray
   })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function handleToggleLike(payload) {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var niceSheet = ss.getSheetByName('nice');
+  
+  if (!niceSheet) {
+    niceSheet = ss.insertSheet('nice');
+  }
+  
+  var email = payload.email || '';
+  var word = payload.word || '';
+  var creator = payload.creator || '';
+  
+  if (!email || !word || !creator) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: '必要なパラメーターが不足しています。' 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+  
+  var data = niceSheet.getDataRange().getValues();
+  var foundIndex = -1;
+  
+  // A: email, B: word, C: creator
+  for (var i = 0; i < data.length; i++) {
+    var checkEmail = (data[i][0] != null) ? String(data[i][0]).trim() : '';
+    var checkWord = (data[i][1] != null) ? String(data[i][1]).trim() : '';
+    var checkCreator = (data[i][2] != null) ? String(data[i][2]).trim() : '';
+    
+    if (checkEmail === String(email).trim() && checkWord === String(word).trim() && checkCreator === String(creator).trim()) {
+      foundIndex = i;
+      break;
+    }
+  }
+  
+  if (foundIndex !== -1) {
+    // いいね解除
+    niceSheet.deleteRow(foundIndex + 1); // 1-indexed
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      liked: false 
+    })).setMimeType(ContentService.MimeType.JSON);
+  } else {
+    // いいね追加
+    niceSheet.appendRow([email, word, creator]);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      liked: true 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
 }

@@ -111,8 +111,8 @@ export const TestSelectionScreen: React.FC = () => {
       return;
     }
     
-    // 実際のテスト画面へ遷移
-    alert(`${selectedIndices.size}個の単語でテストを開始します！（UIは未実装です）`);
+    const selectedCards = cards.filter((_, index) => selectedIndices.has(index));
+    navigate(`/test/${encodeURIComponent(title || '')}/run`, { state: { selectedCards } });
   };
 
   if (loading) {

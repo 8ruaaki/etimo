@@ -194,10 +194,10 @@ export const getFlashcard = async (email: string, title: string) => {
 };
 
 // 単語帳一覧を取得
-export const getFlashcardList = async (email: string) => {
+export const getFlashcardList = async (email: string, word?: string) => {
   if (!GAS_WEB_APP_URL) {
     console.warn('VITE_GAS_WEB_APP_URL is not set. Returning empty list.');
-    return { success: true, flashcards: [] };
+    return { success: true, flashcards: [], registeredFlashcards: [] };
   }
 
   try {
@@ -206,7 +206,8 @@ export const getFlashcardList = async (email: string) => {
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify({
         action: 'getFlashcardList',
-        email
+        email,
+        word
       }),
     });
     return await response.json();
@@ -309,6 +310,52 @@ export const deleteWordFromFlashcard = async (email: string, title: string, word
     return await response.json();
   } catch (error) {
     console.error('Failed to delete word from flashcard:', error);
+    throw error;
+  }
+};
+
+export const getAllDatabaseWords = async (email?: string) => {
+  if (!GAS_WEB_APP_URL) {
+    console.warn('VITE_GAS_WEB_APP_URL is not set. Returning empty list.');
+    return { success: true, words: [] };
+  }
+
+  try {
+    const response = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'getAllDatabaseWords',
+        email
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to get all database words:', error);
+    throw error;
+  }
+};
+
+export const toggleLike = async (email: string, word: string, creator: string) => {
+  if (!GAS_WEB_APP_URL) {
+    console.warn('VITE_GAS_WEB_APP_URL is not set. Simulating success.');
+    return { success: true, liked: true };
+  }
+
+  try {
+    const response = await fetch(GAS_WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'toggleLike',
+        email,
+        word,
+        creator
+      }),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error('Failed to toggle like:', error);
     throw error;
   }
 };

@@ -11,6 +11,8 @@ import { LearnMode } from './components/LearnMode'
 import { LearnScreen } from './components/LearnScreen'
 import { TestMode } from './components/TestMode'
 import { TestSelectionScreen } from './components/TestSelectionScreen'
+import { TestRunScreen } from './components/TestRunScreen'
+import { DatabaseScreen } from './components/DatabaseScreen'
 
 function App() {
   return (
@@ -27,6 +29,8 @@ function App() {
       <Route path="/learn/:title" element={<LearnScreen />} />
       <Route path="/test" element={<TestMode />} />
       <Route path="/test/:title" element={<TestSelectionScreen />} />
+      <Route path="/test/:title/run" element={<TestRunScreen />} />
+      <Route path="/database" element={<DatabaseScreen />} />
     </Routes>
   )
 }

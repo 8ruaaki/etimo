@@ -1,5 +1,5 @@
 import React from 'react';
-import { PlusSquare, BookOpen, ClipboardCheck, Share2, LogOut, Settings } from 'lucide-react';
+import { PlusSquare, BookOpen, ClipboardCheck, Database, LogOut, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 export const Home: React.FC = () => {
@@ -9,7 +9,7 @@ export const Home: React.FC = () => {
     { id: 'create', title: '単語帳作成', icon: <PlusSquare size={32} />, color: '#3b82f6' }, // Blue 500
     { id: 'learn', title: '学習', icon: <BookOpen size={32} />, color: '#60a5fa' }, // Blue 400
     { id: 'test', title: 'テストモード', icon: <ClipboardCheck size={32} />, color: '#0ea5e9' }, // Sky 500
-    { id: 'diagnosis', title: '語源力診断', icon: <Share2 size={32} />, color: '#0284c7' }, // Sky 600
+    { id: 'database', title: 'データベース', icon: <Database size={32} />, color: '#0284c7' }, // Sky 600
   ];
 
   return (
@@ -37,15 +37,15 @@ export const Home: React.FC = () => {
           {menuItems.map((item) => (
             <button
               key={item.id}
-              onClick={() => {
+              onClick={async () => {
                 if (item.id === 'create') {
                   navigate('/flashcards');
                 } else if (item.id === 'learn') {
                   navigate('/learn');
                 } else if (item.id === 'test') {
                   navigate('/test');
-                } else if (item.id === 'diagnosis') {
-                  navigate('/etymology-test');
+                } else if (item.id === 'database') {
+                  navigate('/database');
                 }
               }}
               style={{
@@ -111,4 +111,3 @@ export const Home: React.FC = () => {
     </div>
   );
 };
-
