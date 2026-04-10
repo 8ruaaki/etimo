@@ -195,6 +195,7 @@ export const WordList: React.FC = () => {
 
       <button
         onClick={() => navigate(`/flashcards/${title}/add`)}
+        className="fixed-fab"
         style={{
           position: 'fixed',
           bottom: '40px',

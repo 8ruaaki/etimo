@@ -158,6 +158,7 @@ const WordDetailModal: React.FC<{
     >
       <div
         onClick={e => e.stopPropagation()}
+        className="modal-content"
         style={{
           background: 'var(--panel-bg)',
           border: '1px solid var(--panel-border)',
@@ -252,7 +253,7 @@ const WordDetailModal: React.FC<{
 
             {/* Word + Meaning */}
             <div style={{ textAlign: 'center', margin: '16px 0' }}>
-              <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
+              <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
                 {item.word}
               </h3>
               <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -267,7 +268,7 @@ const WordDetailModal: React.FC<{
                   語源で分解
                 </h4>
 
-                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div className="etymology-parts-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   {parts.map((part, idx) => (
                     <React.Fragment key={idx}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '180px' }}>
@@ -296,7 +297,7 @@ const WordDetailModal: React.FC<{
                         </div>
                       </div>
                       {idx < parts.length - 1 && (
-                        <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
+                        <div className="etymology-plus-icon" style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
                           <Plus size={24} color="var(--text-secondary)" />
                         </div>
                       )}
@@ -387,7 +388,7 @@ const WordDetailModal: React.FC<{
 
             {/* Word + Meaning */}
             <div style={{ textAlign: 'center', margin: '16px 0' }}>
-              <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
+              <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
                 {item.word}
               </h3>
               <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
@@ -424,7 +425,7 @@ const WordDetailModal: React.FC<{
         ) : (
           /* ═══ Unknown Type: Fallback ═══ */
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
+            <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
               {item.word}
             </h3>
             <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>

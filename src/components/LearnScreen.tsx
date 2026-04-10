@@ -340,7 +340,7 @@ export const LearnScreen: React.FC = () => {
 
             {/* Word */}
             <div style={{ textAlign: 'center', margin: '16px 0' }}>
-              <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
+              <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
                 {currentCard.word}
               </h3>
             </div>
@@ -354,7 +354,7 @@ export const LearnScreen: React.FC = () => {
                   </h4>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+                <div className="etymology-parts-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
                   {parts.map((part, idx) => (
                     <React.Fragment key={idx}>
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', width: '180px' }}>
@@ -407,7 +407,7 @@ export const LearnScreen: React.FC = () => {
                         </div>
                       </div>
                       {idx < parts.length - 1 && (
-                        <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
+                        <div className="etymology-plus-icon" style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
                           <Plus size={24} color="var(--text-secondary)" />
                         </div>
                       )}
@@ -576,7 +576,7 @@ export const LearnScreen: React.FC = () => {
 
             {/* Word */}
             <div style={{ textAlign: 'center', margin: '16px 0' }}>
-              <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
+              <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
                 {currentCard.word}
               </h3>
             </div>
@@ -698,7 +698,7 @@ export const LearnScreen: React.FC = () => {
           </div>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 0' }}>
-            <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
+            <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '16px' }}>
               {currentCard.word}
             </h3>
             <p style={{ fontSize: '1.4rem', fontWeight: 600, color: 'var(--text-secondary)' }}>

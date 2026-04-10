@@ -328,7 +328,7 @@ const SelectionStep: React.FC<{
     )}
 
     <div style={{ textAlign: 'center', margin: '16px 0' }}>
-      <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
+      <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
         {word}
       </h3>
       {targetWordMeaning && (
@@ -517,7 +517,7 @@ const ScreenA: React.FC<{
 
       {/* 対象単語 */}
       <div style={{ textAlign: 'center', margin: '16px 0' }}>
-        <h3 style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
+        <h3 className="huge-word-title" style={{ fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)', marginBottom: '8px' }}>
           {word}
         </h3>
         {targetWordMeaning && (
@@ -539,7 +539,7 @@ const ScreenA: React.FC<{
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="etymology-parts-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
             {etymologyParts.map((part, idx) => (
               <React.Fragment key={idx}>
                 <div style={{
@@ -586,7 +586,7 @@ const ScreenA: React.FC<{
                   </div>
                 </div>
                 {idx < etymologyParts.length - 1 && (
-                  <div style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
+                  <div className="etymology-plus-icon" style={{ display: 'flex', alignItems: 'center', height: '48px' }}>
                     <Plus size={24} color="var(--text-secondary)" />
                   </div>
                 )}
@@ -754,6 +754,7 @@ const ScreenA: React.FC<{
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            className="modal-content"
             style={{
               background: 'var(--panel-bg)',
               border: '1px solid var(--panel-border)',
@@ -1005,7 +1006,7 @@ const ScreenB: React.FC<{
           <>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', margin: '8px 0 16px 0' }}>
               <p style={{ fontSize: '1rem', color: 'var(--text-secondary)' }}>単語を語源パーツに分解してください</p>
-              <div style={{ display: 'flex', alignItems: 'center', fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
+              <div className="huge-word-title" style={{ display: 'flex', alignItems: 'center', fontSize: '3.5rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-primary)' }}>
                 {word.split('').map((char, index) => (
                   <React.Fragment key={index}>
                     <span>{char}</span>
