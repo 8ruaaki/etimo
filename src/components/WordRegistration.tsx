@@ -209,7 +209,7 @@ const InputStep: React.FC<{
       <div>
         <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '8px' }}>暗記したい英単語を入力</h3>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          AIがあなたの語源リストと照合し、最適な暗記方法を提案します。
+          AIが最適な暗記方法を提案します。
         </p>
       </div>
 
@@ -1520,7 +1520,7 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
             </React.Fragment>
           ))}
 
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+          <div style={{ display: 'none', justifyContent: 'center', marginTop: '16px' }}>
             <button
               onClick={addExplanation}
               style={{
