@@ -1197,30 +1197,45 @@ function handleGetAllDatabaseWords(payload) {
     }
     
     // シート名からユーザー名を取得 (形式: Title_Email)
-    var parts = sheetName.split('_');
-    var sheetEmail = parts.length > 1 ? parts[parts.length - 1] : '';
-    var sheetUsername = emailToUsername[sheetEmail] || 'Unknown User';
+    // メールアドレスやタイトルに「_」が含まれる場合があるため、
+    // 登録済みEmailリストと末尾を照合して正確に分解する
+    var sheetEmail = '';
+    var sheetUsername = 'Unknown User';
     var wordbookTitle = '';
     var isUserDictionary = false;
     
-    // ユーザー独自の語源シート（Usernameのシート）の場合は名前をそのまま使う
-    if (parts.length === 1 && !sheetEmail) {
-       // もしシート名が直接usernameとして存在しているかチェック
-       for (var e in emailToUsername) {
-         if (emailToUsername[e] === sheetName) {
-           sheetUsername = sheetName;
-           isUserDictionary = true;
-           break;
-         }
-       }
+    // まず、登録済みメールアドレスの末尾一致で検索（長い方を優先）
+    var matchedEmail = '';
+    for (var e in emailToUsername) {
+      var suffix = '_' + e;
+      if (sheetName.length > suffix.length && sheetName.substring(sheetName.length - suffix.length) === suffix) {
+        // より長い（正確な）メールアドレスを優先する
+        if (e.length > matchedEmail.length) {
+          matchedEmail = e;
+        }
+      }
     }
     
-    if (isUserDictionary) {
-      wordbookTitle = 'オリジナル単語帳';
-    } else if (parts.length > 1) {
-      wordbookTitle = parts.slice(0, parts.length - 1).join('_');
+    if (matchedEmail) {
+      sheetEmail = matchedEmail;
+      sheetUsername = emailToUsername[matchedEmail];
+      // タイトル = シート名から末尾の「_Email」を除いた部分
+      wordbookTitle = sheetName.substring(0, sheetName.length - matchedEmail.length - 1);
     } else {
-      wordbookTitle = sheetName;
+      // メール一致しない場合：ユーザー独自の語源シート（Usernameのシート）かチェック
+      for (var e in emailToUsername) {
+        if (emailToUsername[e] === sheetName) {
+          sheetUsername = sheetName;
+          isUserDictionary = true;
+          break;
+        }
+      }
+      
+      if (isUserDictionary) {
+        wordbookTitle = 'オリジナル単語帳';
+      } else {
+        wordbookTitle = sheetName;
+      }
     }
     
     // 単語帳シート(通常は "Title_Email" の形式)か、ユーザの既知語源シートなど。
