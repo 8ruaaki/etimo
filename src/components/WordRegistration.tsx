@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, ArrowRight, ArrowDown, Plus, RefreshCcw, Save } from 'lucide-react';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { ArrowLeft, Search, BookOpen, Lightbulb, Sparkles, ArrowRight, ArrowDown, Plus, RefreshCcw, Save, Loader2 } from 'lucide-react';
 import { getTestSheetEtymologies, addWordToFlashcard } from '../api/flashcard';
 import { checkEtymologyMatch, generateFakeEtymology, generateMnemonicStory, type EtymologyPart } from '../api/wordRegistration';
+import { generateExampleWithTranslation } from '../api/testApi';
 
 type Step = 'input' | 'judging' | 'selection' | 'screenA' | 'screenB' | 'screenC' | 'screenD' | 'screenE';
 
@@ -17,9 +18,67 @@ export const WordRegistration: React.FC = () => {
   const [targetWordMeaning, setTargetWordMeaning] = useState<string>('');
   const [integratedMeaning, setIntegratedMeaning] = useState<string>('');
   const [etymologyParts, setEtymologyParts] = useState<EtymologyPart[]>([]);
+  const [initialSteps, setInitialSteps] = useState<string[]>([]);
   const [cameFromScreenA, setCameFromScreenA] = useState(false);
 
   const [isSaving, setIsSaving] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => {
+    const editWordData = location.state?.editWordData;
+    if (editWordData && Array.isArray(editWordData)) {
+      // 既存データを編集モードで読み込み
+      const cardType = String(editWordData[0]);
+      const w = editWordData[1] || '';
+      const m = editWordData[2] || '';
+
+      setWord(w);
+      setTargetWordMeaning(m);
+
+      if (cardType === '0') {
+        // ScreenA (Etymology mode)
+        // D〜K列 (インデックス3〜10) が語源データ
+        const parts: EtymologyPart[] = [];
+        for (let i = 3; i < 11; i += 2) {
+          if (editWordData[i]) {
+            parts.push({
+              part: editWordData[i],
+              meaning: editWordData[i + 1] || '',
+              relatedWords: []
+            });
+          }
+        }
+        setEtymologyParts(parts);
+
+        // L列以降 (インデックス11〜) がステップ
+        const loadedSteps: string[] = [];
+        for (let i = 11; i < editWordData.length; i++) {
+          if (editWordData[i]) {
+            loadedSteps.push(editWordData[i]);
+          }
+          // UIの復元のために、integratedMeaningには不要かもしれないが、ロードした事を伝えるため
+        }
+        if (loadedSteps.length > 0) {
+          setInitialSteps(loadedSteps);
+        }
+
+        setStep('screenA');
+      } else if (cardType === 'E0' || cardType === 'E1') {
+        // ScreenB etc
+        setFreeText(editWordData[3] || '');
+        setStep('screenB'); // Simplify routing for editing fake etymologies
+      } else {
+        // Default fallback for old formats
+        setFreeText(editWordData[3] || '');
+        const loadedSteps: string[] = [];
+        for (let i = 4; i < editWordData.length; i++) {
+          if (editWordData[i]) loadedSteps.push(editWordData[i]);
+        }
+        if (loadedSteps.length > 0) setInitialSteps(loadedSteps);
+        setStep('screenD');
+      }
+    }
+  }, [location.state]);
 
   // ── Step: 単語入力 ──────────────────────────────────────────
   const handleJudge = async () => {
@@ -157,10 +216,12 @@ export const WordRegistration: React.FC = () => {
             targetWordMeaning={targetWordMeaning}
             integratedMeaning={integratedMeaning}
             etymologyParts={etymologyParts}
+            initialSteps={initialSteps}
             onBack={backToInput}
             onSave={handleSaveToSheet}
             isSaving={isSaving}
             flashcardTitle={title ?? ''}
+            isEditMode={!!location.state?.editWordData}
             onGoToSelection={() => {
               setCameFromScreenA(true);
               setStep('selection');
@@ -182,7 +243,7 @@ export const WordRegistration: React.FC = () => {
           <ScreenC word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
         {step === 'screenD' && (
-          <ScreenD word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('selection')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
+          <ScreenD word={word} meaning={targetWordMeaning} freeText={freeText} initialSteps={initialSteps} onBack={() => setStep('selection')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
         )}
         {step === 'screenE' && (
           <ScreenE word={word} meaning={targetWordMeaning} freeText={freeText} onBack={() => setStep('screenB')} onSave={handleSaveToSheet} isSaving={isSaving} flashcardTitle={title ?? ''} />
@@ -289,7 +350,7 @@ const JudgingStep: React.FC = () => (
       }}
     />
     <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>語源を分析中...</p>
-    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>あなたの語源リストと照合しています</p>
+    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>語源で覚えるべきか判定中</p>
   </div>
 );
 
@@ -439,17 +500,21 @@ const ScreenA: React.FC<{
   targetWordMeaning: string;
   integratedMeaning: string;
   etymologyParts: EtymologyPart[];
+  initialSteps?: string[];
   onBack: () => void;
   onSave: (rowData: string[]) => void;
   isSaving: boolean;
   flashcardTitle: string;
+  isEditMode?: boolean;
   onGoToSelection: () => void;
-}> = ({ word, targetWordMeaning, integratedMeaning, etymologyParts, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, onGoToSelection }) => {
+}> = ({ word, targetWordMeaning, integratedMeaning, etymologyParts, initialSteps, onBack, onSave, isSaving, flashcardTitle: _flashcardTitle, isEditMode, onGoToSelection }) => {
   const [selectedPartIndex, setSelectedPartIndex] = useState<number | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
 
   useEffect(() => {
-    if (integratedMeaning) {
+    if (initialSteps && initialSteps.length > 0) {
+      setSteps(initialSteps);
+    } else if (integratedMeaning) {
       const parsedSteps = integratedMeaning.split(/→|->|＝/).map(s => s.trim()).filter(Boolean);
       // AIは最後に意味を付与してくることが多いため、最後のステップが対象単語の意味に近い場合は編集用ステップから除外
       if (parsedSteps.length > 0) {
@@ -462,6 +527,7 @@ const ScreenA: React.FC<{
   }, [integratedMeaning]);
 
   const openModal = (partIndex: number) => {
+    if (isEditMode) return;
     setSelectedPartIndex(partIndex);
   };
 
@@ -534,9 +600,11 @@ const ScreenA: React.FC<{
             <h4 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center', margin: 0 }}>
               語源で分解
             </h4>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', margin: 0, opacity: 0.7 }}>
-              💡 語源部分をタップすると関連単語が表示されます
-            </p>
+            {!isEditMode && (
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textAlign: 'center', margin: 0, opacity: 0.7 }}>
+                💡 語源部分をタップすると関連単語が表示されます
+              </p>
+            )}
           </div>
 
           <div className="etymology-parts-container" style={{ display: 'flex', flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'center', gap: '12px', flexWrap: 'wrap' }}>
@@ -561,15 +629,15 @@ const ScreenA: React.FC<{
                       fontSize: '1.4rem',
                       textAlign: 'center',
                       width: '100%',
-                      cursor: 'pointer',
+                      cursor: isEditMode ? 'default' : 'pointer',
                       transition: 'all 0.2s ease',
                       border: '2px solid transparent',
                     }}
                     onMouseEnter={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(59,130,246,0.25)';
+                      if (!isEditMode) (e.currentTarget as HTMLDivElement).style.background = 'rgba(59,130,246,0.25)';
                     }}
                     onMouseLeave={e => {
-                      (e.currentTarget as HTMLDivElement).style.background = 'rgba(59,130,246,0.15)';
+                      if (!isEditMode) (e.currentTarget as HTMLDivElement).style.background = 'rgba(59,130,246,0.15)';
                     }}
                   >
                     {part.part}
@@ -1394,15 +1462,48 @@ const ScreenC: React.FC<{ word: string; meaning: string; freeText: string; onBac
 // ══════════════════════════════════════════════════════════════
 // 画面 D: ストーリーで覚える
 // ══════════════════════════════════════════════════════════════
-const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBack: () => void; onSave: (rowData: string[]) => void; isSaving: boolean; flashcardTitle: string }> = ({
+const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; initialSteps?: string[]; onBack: () => void; onSave: (rowData: string[]) => void; isSaving: boolean; flashcardTitle: string }> = ({
   word,
   meaning,
+  freeText,
+  initialSteps,
   onBack,
   onSave,
   isSaving,
 }) => {
-  const [imageText, setImageText] = useState<string>('');
-  const [explanations, setExplanations] = useState<string[]>(['']);
+  const [imageText, setImageText] = useState<string>(freeText || '');
+  const [explanations, setExplanations] = useState<string[]>(initialSteps?.length ? initialSteps : ['']);
+  const [isGeneratingExample, setIsGeneratingExample] = useState(false);
+
+  useEffect(() => {
+    if (freeText) setImageText(freeText);
+    if (initialSteps && initialSteps.length > 0) setExplanations(initialSteps);
+  }, [freeText, initialSteps]);
+
+  const handleGenerateExample = async () => {
+    setIsGeneratingExample(true);
+    try {
+      // Set the image text to "例文" as requested
+      setImageText('例文');
+      
+      // Generate example sentence and translation together
+      const result = await generateExampleWithTranslation(word, meaning);
+      
+      // Format the result: English on first line, Japanese on second line
+      const combinedOutput = `${result.english}\n${result.japanese}`;
+      
+      // Set explanations to contain the combined output in a single field
+      setExplanations([combinedOutput]);
+    } catch (err) {
+      console.error('Failed to generate example sentence:', err);
+      // Fallback explanations
+      setExplanations([
+        `I 「${word}」 something.\n私は「${meaning}」をします。`
+      ]);
+    } finally {
+      setIsGeneratingExample(false);
+    }
+  };
 
   const updateExplanation = (index: number, value: string) => {
     const newExps = [...explanations];
@@ -1459,9 +1560,41 @@ const ScreenD: React.FC<{ word: string; meaning: string; freeText: string; onBac
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
         <div>
-          <label style={{ display: 'block', fontSize: '0.95rem', fontWeight: 600, marginBottom: '8px', color: 'var(--text-secondary)' }}>
-            対象単語のイメージ
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+            <label style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-secondary)', margin: 0 }}>
+              対象単語のイメージ
+            </label>
+            <button
+              onClick={handleGenerateExample}
+              disabled={isGeneratingExample}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '0.8rem',
+                color: isGeneratingExample ? 'var(--text-secondary)' : '#a78bfa',
+                background: isGeneratingExample ? 'rgba(255,255,255,0.05)' : 'rgba(139,92,246,0.15)',
+                border: isGeneratingExample ? '1px solid var(--panel-border)' : '1px solid rgba(139,92,246,0.4)',
+                borderRadius: '8px',
+                cursor: isGeneratingExample ? 'wait' : 'pointer',
+                transition: 'all 0.2s',
+                fontWeight: 600,
+              }}
+            >
+              {isGeneratingExample ? (
+                <>
+                  <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />
+                  生成中...
+                </>
+              ) : (
+                <>
+                  <Sparkles size={14} />
+                  AIが例文を作成
+                </>
+              )}
+            </button>
+          </div>
           <input
             className="custom-input"
             value={imageText}

@@ -148,8 +148,14 @@ export const WordList: React.FC = () => {
                 justifyContent: 'space-between'
               }}
             >
-              <div>
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '4px' }}>
+              <div 
+                onClick={() => navigate(`/flashcards/${encodeURIComponent(title || '')}/add`, { state: { editWordData: wordObj.rawData } })}
+                style={{ cursor: 'pointer', flex: 1 }}
+                title="タップして編集"
+              >
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '4px', transition: 'color 0.2s ease' }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#3b82f6'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-primary)'}>
                   {wordObj.word}
                 </h3>
                 {wordObj.meaning && (

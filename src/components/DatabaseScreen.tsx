@@ -148,7 +148,7 @@ const WordDetailModal: React.FC<{
         left: 0,
         right: 0,
         bottom: 0,
-        background: 'rgba(0, 0, 0, 0.92)',
+        background: 'rgba(0, 0, 0)',
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'flex-start',
@@ -702,11 +702,13 @@ const WordDetailModal: React.FC<{
 export const DatabaseScreen: React.FC = () => {
   const navigate = useNavigate();
   const [words, setWords] = useState<WordEntry[]>([]);
-  const [filteredWords, setFilteredWords] = useState<WordEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Two-level nav state
+  const [selectedWordbook, setSelectedWordbook] = useState<string | null>(null);
+  const [selectedUser, setSelectedUser] = useState<string>(''); // '' = all users
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedWordbook, setSelectedWordbook] = useState<string>(''); // '' means all wordbooks
   const [selectedWord, setSelectedWord] = useState<WordEntry | null>(null);
 
   useEffect(() => {
@@ -718,10 +720,8 @@ export const DatabaseScreen: React.FC = () => {
       setLoading(true);
       const currentEmail = localStorage.getItem('email') || '';
       const result = await getAllDatabaseWords(currentEmail);
-
       if (result.success) {
         setWords(result.words || []);
-        setFilteredWords(result.words || []);
       } else {
         setError(result.error || '単語の取得に失敗しました。');
       }
@@ -737,52 +737,56 @@ export const DatabaseScreen: React.FC = () => {
     const currentEmail = localStorage.getItem('email');
     if (!currentEmail || !wordObj.username) return;
 
-    // Optimistic update
     const isCurrentlyLiked = wordObj.isLiked;
     const increment = isCurrentlyLiked ? -1 : 1;
 
-    const updateState = (prev: WordEntry[]) => prev.map(w =>
+    setWords(prev => prev.map(w =>
       (w.word === wordObj.word && w.username === wordObj.username)
         ? { ...w, isLiked: !isCurrentlyLiked, likes: (w.likes || 0) + increment }
         : w
-    );
-
-    setWords(updateState);
-    setFilteredWords(updateState);
+    ));
 
     try {
       const result = await toggleLike(currentEmail, wordObj.word, wordObj.username);
-      if (!result.success) {
-        // 失敗した場合は再読み込みして状態を戻す
-        loadWords();
-      }
-    } catch (err) {
-      console.error(err);
+      if (!result.success) loadWords();
+    } catch {
       loadWords();
     }
   };
 
-  // Extract unique wordbooks for the dropdown
-  const availableWordbooks = Array.from(new Set(words.map(w => w.wordbook).filter(Boolean))) as string[];
+  // Derived data
+  const availableUsers = Array.from(new Set(words.map(w => w.username).filter(Boolean))) as string[];
 
-  useEffect(() => {
-    let filtered = words;
+  // Words after user filter (applied to both views)
+  const userFilteredWords = selectedUser
+    ? words.filter(w => w.username === selectedUser)
+    : words;
 
-    if (selectedWordbook) {
-      filtered = filtered.filter(item => item.wordbook === selectedWordbook);
-    }
+  // Wordbooks from user-filtered words: { wordbookName -> entries[] }
+  const wordbookMap = React.useMemo(() => {
+    const map = new Map<string, WordEntry[]>();
+    userFilteredWords.forEach(w => {
+      const wb = w.wordbook || '（未分類）';
+      if (!map.has(wb)) map.set(wb, []);
+      map.get(wb)!.push(w);
+    });
+    return map;
+  }, [userFilteredWords]);
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        item => item.word.toLowerCase().includes(q) ||
-          item.meaning.toLowerCase().includes(q) ||
-          (item.username && item.username.toLowerCase().includes(q))
-      );
-    }
-    
-    setFilteredWords(filtered);
-  }, [searchQuery, selectedWordbook, words]);
+  const wordbookList = Array.from(wordbookMap.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+
+  // Words in selected wordbook, after search filter
+  const wordsInSelectedWordbook = React.useMemo(() => {
+    if (!selectedWordbook) return [];
+    const base = wordbookMap.get(selectedWordbook) || [];
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.toLowerCase();
+    return base.filter(w =>
+      w.word.toLowerCase().includes(q) ||
+      w.meaning.toLowerCase().includes(q) ||
+      (w.username && w.username.toLowerCase().includes(q))
+    );
+  }, [selectedWordbook, wordbookMap, searchQuery]);
 
   if (loading) {
     return (
@@ -794,6 +798,73 @@ export const DatabaseScreen: React.FC = () => {
     );
   }
 
+  // ── Word list view (after selecting a wordbook) ──
+  if (selectedWordbook !== null) {
+    return (
+      <div className="glass-panel" style={{ padding: '40px', maxWidth: '800px', width: '100%', margin: '0 auto', marginTop: '40px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 80px)' }}>
+        {/* Header */}
+        <div className="flex-between" style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button
+              onClick={() => { setSelectedWordbook(null); setSearchQuery(''); }}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--panel-border)', borderRadius: '10px', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)' }}
+            >
+              <ArrowLeft size={18} color="currentColor" />
+            </button>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(14,165,233,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9' }}>
+              <BookOpen size={20} />
+            </div>
+            <div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: 0 }}>みんなのデータベース</p>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 700, margin: 0 }}>{selectedWordbook}</h2>
+            </div>
+          </div>
+        </div>
+
+        {/* Search */}
+        <div style={{ marginBottom: '20px', position: 'relative' }}>
+          <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
+            <Search size={20} />
+          </div>
+          <input
+            type="text"
+            placeholder="単語を検索"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="custom-input"
+            style={{ width: '100%', padding: '16px 16px 16px 48px', fontSize: '1rem', borderRadius: '12px' }}
+          />
+        </div>
+
+        {/* Stats */}
+        <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
+          <span>登録数: {wordsInSelectedWordbook.length} 件</span>
+        </div>
+
+        {/* Word list */}
+        <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {wordsInSelectedWordbook.length === 0 ? (
+            <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>
+              見つかりませんでした。
+            </div>
+          ) : (
+            <GroupedWordList
+              words={wordsInSelectedWordbook}
+              onSelectWord={setSelectedWord}
+              onToggleLike={handleToggleLike}
+            />
+          )}
+        </div>
+
+        {/* Detail Modal */}
+        {selectedWord && (
+          <WordDetailModal item={selectedWord} onClose={() => setSelectedWord(null)} />
+        )}
+      </div>
+    );
+  }
+
+  // ── Wordbook list view (top level) ──
   return (
     <div className="glass-panel" style={{ padding: '40px', maxWidth: '800px', width: '100%', margin: '0 auto', marginTop: '40px', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 80px)' }}>
       {/* Header */}
@@ -801,30 +872,11 @@ export const DatabaseScreen: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={() => navigate('/home')}
-            style={{
-              background: 'rgba(255,255,255,0.05)',
-              border: '1px solid var(--panel-border)',
-              borderRadius: '10px',
-              padding: '8px 12px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              color: 'var(--text-primary)'
-            }}
+            style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--panel-border)', borderRadius: '10px', padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)' }}
           >
             <ArrowLeft size={18} color="currentColor" />
           </button>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            background: 'rgba(14, 165, 233, 0.2)',
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#0ea5e9'
-          }}>
+          <div style={{ width: '40px', height: '40px', background: 'rgba(14,165,233,0.2)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9' }}>
             <Database size={20} />
           </div>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>みんなのデータベース</h2>
@@ -832,57 +884,35 @@ export const DatabaseScreen: React.FC = () => {
       </div>
 
       {error && (
-        <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', borderRadius: '12px', marginBottom: '20px', color: '#ef4444' }}>
+        <div style={{ padding: '16px', background: 'rgba(239,68,68,0.2)', border: '1px solid #ef4444', borderRadius: '12px', marginBottom: '20px', color: '#ef4444' }}>
           {error}
         </div>
       )}
 
-      {/* Search Box */}
-      <div style={{ marginBottom: '16px', position: 'relative' }}>
-        <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)' }}>
-          <Search size={20} />
-        </div>
-        <input
-          type="text"
-          placeholder="単語を検索"
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="custom-input"
-          style={{
-            width: '100%',
-            padding: '16px 16px 16px 48px',
-            fontSize: '1rem',
-            borderRadius: '12px'
-          }}
-        />
-      </div>
-
-      {/* Wordbook Filter Dropdown */}
+      {/* User filter */}
       <div style={{ marginBottom: '20px', position: 'relative' }}>
         <div style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }}>
-          <BookOpen size={18} />
+          <Users size={18} />
         </div>
         <select
-          value={selectedWordbook}
-          onChange={e => setSelectedWordbook(e.target.value)}
+          value={selectedUser}
+          onChange={e => setSelectedUser(e.target.value)}
           className="custom-input"
           style={{
             width: '100%',
-            padding: '12px 40px 12px 42px', /* extra left padding for icon, right for arrow */
+            padding: '12px 40px 12px 42px',
             fontSize: '1rem',
             borderRadius: '12px',
-            appearance: 'none', /* hide default arrow */
+            appearance: 'none',
             backgroundColor: 'rgba(255,255,255,0.05)',
             border: '1px solid var(--panel-border)',
             color: 'var(--text-primary)',
             cursor: 'pointer'
           }}
         >
-          <option value="" style={{ color: '#000' }}>すべて表示（単語帳を選択しない）</option>
-          {availableWordbooks.sort().map(wb => (
-            <option key={wb} value={wb} style={{ color: '#000' }}>
-              {wb}
-            </option>
+          <option value="" style={{ color: '#000' }}>すべてのユーザー</option>
+          {availableUsers.sort().map(u => (
+            <option key={u} value={u} style={{ color: '#000' }}>{u}</option>
           ))}
         </select>
         <div style={{ position: 'absolute', right: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary)', pointerEvents: 'none' }}>
@@ -892,35 +922,60 @@ export const DatabaseScreen: React.FC = () => {
 
       {/* Stats */}
       <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '12px', display: 'flex', justifyContent: 'flex-end', gap: '16px' }}>
-        <span>ユニーク単語数: {(() => { const s = new Set(filteredWords.map(w => w.word.toLowerCase())); return s.size; })()} 語</span>
-        <span>登録数: {filteredWords.length} 件</span>
+        <span>単語帳数: {wordbookList.length} 冊</span>
+        <span>登録単語数: {userFilteredWords.length} 件</span>
       </div>
 
-      {/* Words List - Grouped by word */}
-      <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {filteredWords.length === 0 ? (
+      {/* Wordbook cards */}
+      <div style={{ flex: 1, overflowY: 'auto', paddingRight: '8px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {wordbookList.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--text-secondary)', padding: '40px' }}>
-            見つかりませんでした。
+            単語帳がありません。
           </div>
         ) : (
-          <GroupedWordList
-            words={filteredWords}
-            onSelectWord={setSelectedWord}
-            onToggleLike={handleToggleLike}
-          />
+          wordbookList.map(([wb, entries]) => {
+            const uniqueUsers = Array.from(new Set(entries.map(e => e.username).filter(Boolean)));
+            return (
+              <div
+                key={wb}
+                onClick={() => { setSelectedWordbook(wb); setSearchQuery(''); }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '16px',
+                  padding: '20px 24px',
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid var(--panel-border)',
+                  borderRadius: '14px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(14,165,233,0.06)'; e.currentTarget.style.borderColor = 'rgba(14,165,233,0.25)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'var(--panel-border)'; }}
+              >
+                <div style={{ width: '44px', height: '44px', background: 'rgba(14,165,233,0.15)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0ea5e9', flexShrink: 0 }}>
+                  <BookOpen size={22} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wb}</div>
+                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{entries.length} 単語</span>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <Users size={12} /> {uniqueUsers.join('、')}
+                    </span>
+                  </div>
+                </div>
+                <ChevronDown size={18} color="var(--text-secondary)" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }} />
+              </div>
+            );
+          })
         )}
       </div>
-
-      {/* Detail Modal */}
-      {selectedWord && (
-        <WordDetailModal
-          item={selectedWord}
-          onClose={() => setSelectedWord(null)}
-        />
-      )}
     </div>
   );
 };
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // Grouped Word List Component
