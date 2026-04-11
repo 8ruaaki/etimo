@@ -123,6 +123,35 @@ export const FlashcardList: React.FC = () => {
           </button>
           <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>単語帳一覧</h2>
         </div>
+        <button
+          onClick={() => setShowCreateDialog(true)}
+          style={{
+            background: 'var(--accent-color)',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: 'white',
+            fontWeight: 600,
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+          }}
+          title="単語帳を作成"
+        >
+          <PlusCircle size={18} />
+          <span>作成</span>
+        </button>
       </div>
 
       {error && (
@@ -227,34 +256,6 @@ export const FlashcardList: React.FC = () => {
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'center', marginTop: '20px', marginBottom: '20px' }}>
-        <button
-          onClick={() => setShowCreateDialog(true)}
-          style={{
-            width: '60px',
-            height: '60px',
-            background: 'var(--accent-color)',
-            border: 'none',
-            borderRadius: '50%',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
-            transition: 'all 0.3s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'scale(1.1)';
-            e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.6)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'scale(1)';
-            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
-          }}
-        >
-          <PlusCircle size={32} color="white" />
-        </button>
-      </div>
 
       {showCreateDialog && (
         <div

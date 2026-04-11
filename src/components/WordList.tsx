@@ -95,7 +95,7 @@ export const WordList: React.FC = () => {
   }
 
   return (
-    <div className="glass-panel" style={{ padding: '40px', paddingBottom: '120px', maxWidth: '800px', width: '100%', position: 'relative' }}>
+    <div className="glass-panel" style={{ padding: '40px', paddingBottom: '40px', maxWidth: '800px', width: '100%', position: 'relative' }}>
       <div className="flex-between" style={{ marginBottom: '30px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
@@ -118,6 +118,35 @@ export const WordList: React.FC = () => {
             {decodeURIComponent(title || '')} の単語一覧
           </h2>
         </div>
+        <button
+          onClick={() => navigate(`/flashcards/${title}/add`)}
+          style={{
+            background: 'var(--accent-color)',
+            border: 'none',
+            borderRadius: '10px',
+            padding: '8px 16px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            color: 'white',
+            fontWeight: 600,
+            transition: 'all 0.2s ease',
+            boxShadow: '0 4px 12px rgba(59, 130, 246, 0.3)'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(59, 130, 246, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.3)';
+          }}
+          title="単語を追加"
+        >
+          <PlusCircle size={18} />
+          <span>追加</span>
+        </button>
       </div>
 
       {error && (
@@ -199,38 +228,6 @@ export const WordList: React.FC = () => {
         </div>
       )}
 
-      <button
-        onClick={() => navigate(`/flashcards/${title}/add`)}
-        className="fixed-fab"
-        style={{
-          position: 'fixed',
-          bottom: '40px',
-          left: '40px',
-          width: '60px',
-          height: '60px',
-          background: 'var(--accent-color)',
-          border: 'none',
-          borderRadius: '50%',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
-          transition: 'all 0.3s ease',
-          zIndex: 10
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.transform = 'scale(1.1)';
-          e.currentTarget.style.boxShadow = '0 6px 20px rgba(59, 130, 246, 0.6)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.transform = 'scale(1)';
-          e.currentTarget.style.boxShadow = '0 4px 12px rgba(59, 130, 246, 0.4)';
-        }}
-        title="単語を追加"
-      >
-        <PlusCircle size={32} color="white" />
-      </button>
     </div>
   );
 };
